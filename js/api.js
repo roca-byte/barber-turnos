@@ -18,10 +18,13 @@ const Api = (() => {
     return cliente;
   }
 
-  function aError(e) {
+  function aError(e, status) {
     const msg = (e && e.message) || '';
     const err = new Error(msg || 'DESCONOCIDO');
     err.codigo = CODIGOS.includes(msg.trim()) ? msg.trim() : 'DESCONOCIDO';
+    // Token vencido o refresco fallido: PostgREST contesta 401 / "JWT expired". Para el panel
+    // es lo mismo que no tener permiso: hay que volver a ingresar.
+    if (err.codigo === 'DESCONOCIDO' && (status === 401 || (e && e.status === 401) || /jwt|refresh token/i.test(msg))) err.codigo = 'NO_AUTORIZADO';
     return err;
   }
 
@@ -29,7 +32,7 @@ const Api = (() => {
   async function ok(promesa) {
     let r;
     try { r = await promesa; } catch (e) { throw aError(e); } // sin red: fetch tira TypeError
-    if (r.error) throw aError(r.error);
+    if (r.error) throw aError(r.error, r.status);
     return r.data;
   }
 

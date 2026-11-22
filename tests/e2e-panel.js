@@ -286,11 +286,62 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
   ok(true, '"Salir" vuelve a la pantalla de ingreso');
   await page.context().close();
 
+  const mensajeLogin = 'Tu sesión se cerró. Entrá de nuevo.';
   page = await logueado('panel.html', rpcBase({ marcar_turno: () => falla('NO_AUTORIZADO') }));
   await page.click('[data-turno="t1"]');
   await page.click('[data-act="marcar"][data-estado="atendido"]');
-  await page.waitForFunction(() => document.getElementById('vista').textContent.includes('No tenés permiso'));
-  ok(true, 'un error del servidor se muestra en castellano sin perder la agenda');
+  await page.waitForSelector('#btn-entrar');
+  ok((await vista(page)).includes(mensajeLogin), 'marcar_turno NO_AUTORIZADO: vuelve al ingreso con "Tu sesión se cerró"');
+  await page.context().close();
+
+  console.log('Sesión vencida');
+  page = await abrir(browser, BASE, 'panel.html', rpcBase({ agenda_dia: () => falla('NO_AUTORIZADO') }), (p) => simular(p));
+  await page.fill('#email', 'tito@ejemplo.com');
+  await page.fill('#clave', 'secreta');
+  await page.click('#btn-entrar');
+  await page.waitForSelector('#btn-entrar:not([disabled])');
+  await page.waitForFunction(() => document.getElementById('vista').textContent.includes('Tu sesión se cerró'));
+  ok(true, 'agenda_dia NO_AUTORIZADO: pantalla de ingreso con el mensaje');
+  await page.context().close();
+
+  page = await abrir(browser, BASE, 'panel.html', rpcBase({ agenda_dia: () => json({ code: 'PGRST301', message: 'JWT expired', details: null, hint: null }, 401) }), (p) => simular(p));
+  await page.fill('#email', 'tito@ejemplo.com');
+  await page.fill('#clave', 'secreta');
+  await page.click('#btn-entrar');
+  await page.waitForFunction(() => document.getElementById('vista').textContent.includes('Tu sesión se cerró'));
+  ok(await page.locator('#btn-entrar').count() === 1, 'agenda_dia 401 "JWT expired": también vuelve al ingreso (no queda en Reintentar)');
+  await page.context().close();
+
+  page = await abrir(browser, BASE, 'panel.html', rpcBase({ agenda_dia: () => json({ message: 'boom' }, 500) }), (p) => simular(p));
+  await page.fill('#email', 'tito@ejemplo.com');
+  await page.fill('#clave', 'secreta');
+  await page.click('#btn-entrar');
+  await page.waitForSelector('[data-act="reintentar"]');
+  ok(await page.locator('[data-act="salir"]').count() === 1, 'la pantalla de error de carga tiene "Salir"');
+  await page.context().close();
+
+  // ════ Quitar bloqueo ════
+  console.log('Quitar bloqueo');
+  const borrados = [];
+  page = await abrir(browser, BASE, 'panel.html', rpcBase({
+    agenda_dia: () => { const a = copia(AGENDA); a.bloqueos = [{ id: 'bl1', inicio: '2026-12-01T14:00:00Z', fin: '2026-12-01T15:00:00Z', motivo: 'Médico' }]; return json(a); }
+  }), async (p) => {
+    await simular(p);
+    await p.route('**/rest/v1/bloqueos*', r => {
+      if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
+      borrados.push(r.request().method() + ' ' + new URL(r.request().url()).search);
+      r.fulfill({ status: 204, headers: CORS });
+    });
+  });
+  await page.fill('#email', 'tito@ejemplo.com');
+  await page.fill('#clave', 'secreta');
+  await page.click('#btn-entrar');
+  await page.waitForSelector('[data-bloqueo="bl1"]');
+  await page.click('[data-bloqueo="bl1"] [data-act="quitar-bloqueo"]');
+  await page.waitForFunction(() => true);
+  await pausa(300);
+  ok(page.confirmaciones.length === 1 && borrados.length === 1 && borrados[0] === 'DELETE ?id=eq.bl1', '"Quitar bloqueo" confirma y borra el bloqueo con su id: ' + borrados.join(','));
+  ok(page.llamadas.agenda_dia.length === 2, 'después de quitarlo se vuelve a pedir la agenda');
   await page.context().close();
 
   await browser.close();

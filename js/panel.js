@@ -18,6 +18,18 @@ const Panel = (() => {
   const faltasTexto = (n) => `${n} ${n === 1 ? 'falta' : 'faltas'}`;
   const FECHA_OK = /^\d{4}-\d{2}-\d{2}$/;
 
+  // Manejador único de errores de Api. Si la sesión ya no vale (el servidor dice NO_AUTORIZADO,
+  // o el token venció y no hay sesión) se vuelve al ingreso: reintentar no arregla nada.
+  // Devuelve true si ya mostró el login; si no, el llamador muestra su propio error.
+  async function sesionCaida(e) {
+    let cayo = e && e.codigo === 'NO_AUTORIZADO';
+    if (!cayo) { try { cayo = !(await Api.sesion()); } catch (x) { cayo = false; } }
+    if (!cayo) return false;
+    est.barberia = null;
+    pantallaLogin('Tu sesión se cerró. Entrá de nuevo.');
+    return true;
+  }
+
   // ---------- Ingreso ----------
   function pantallaLogin(msg, email) {
     vista().innerHTML = `<h1>Panel del barbero</h1><p class="sub">Ingresá con tu cuenta.</p>${aviso(msg)}
@@ -130,19 +142,20 @@ const Panel = (() => {
     try {
       est.agenda = await Api.agendaDia(est.barberia.id, est.fecha);
     } catch (e) {
-      if (e.codigo === 'NO_AUTORIZADO') return pantallaLogin(Html.mensajeError(e.codigo));
+      if (await sesionCaida(e)) return;
       return pantallaErrorCarga(Html.mensajeError(e.codigo));
     }
     pantallaAgenda();
   }
 
   function pantallaErrorCarga(msg) {
-    vista().innerHTML = `${aviso(msg)}<button class="boton" type="button" data-act="reintentar">Reintentar</button>`;
+    vista().innerHTML = `${aviso(msg)}<button class="boton" type="button" data-act="reintentar">Reintentar</button>
+      <button class="boton secundario" type="button" data-act="salir">Salir</button>`;
   }
 
   // ---------- Acciones sobre turnos ----------
   async function marcar(id, estado) {
-    try { await Api.marcarTurno(id, estado); } catch (e) { return cargarAgenda(Html.mensajeError(e.codigo)); }
+    try { await Api.marcarTurno(id, estado); } catch (e) { if (await sesionCaida(e)) return; return cargarAgenda(Html.mensajeError(e.codigo)); }
     cargarAgenda();
   }
 
@@ -155,7 +168,7 @@ const Panel = (() => {
 
   async function quitarBloqueo(id) {
     if (!confirm('¿Quitar este bloqueo? Esas horas vuelven a quedar libres para reservar.')) return;
-    try { await Api.borrarBloqueo(id); } catch (e) { return cargarAgenda(Html.mensajeError(e.codigo)); }
+    try { await Api.borrarBloqueo(id); } catch (e) { if (await sesionCaida(e)) return; return cargarAgenda(Html.mensajeError(e.codigo)); }
     cargarAgenda();
   }
 
@@ -200,6 +213,7 @@ const Panel = (() => {
       await Api.turnoManual(est.barberia.id, datos.servicio, Fechas.instante(est.fecha, datos.hora, zona()), datos.nombre, tel);
     } catch (err) {
       guardando = false;
+      if (await sesionCaida(err)) return;
       return pantallaTurnoNuevo(Html.mensajeError(err.codigo), datos);
     }
     guardando = false;
@@ -238,6 +252,7 @@ const Panel = (() => {
       r = await Api.bloquear(est.barberia.id, instanteDeCampo(datos.desde), instanteDeCampo(datos.hasta), datos.motivo);
     } catch (err) {
       bloqueando = false;
+      if (await sesionCaida(err)) return;
       return pantallaBloqueo(Html.mensajeError(err.codigo), datos);
     }
     bloqueando = false;
@@ -268,7 +283,7 @@ const Panel = (() => {
 
   async function cancelarAfectado(id) {
     if (!confirm('¿Cancelar este turno?')) return;
-    try { await Api.marcarTurno(id, 'cancelado'); } catch (e) { return pantallaAfectados(Html.mensajeError(e.codigo)); }
+    try { await Api.marcarTurno(id, 'cancelado'); } catch (e) { if (await sesionCaida(e)) return; return pantallaAfectados(Html.mensajeError(e.codigo)); }
     est.afectados = est.afectados.filter((a) => a.turno_id !== id);
     pantallaAfectados();
   }
@@ -277,7 +292,7 @@ const Panel = (() => {
   async function pantallaFaltas(msg) {
     cargando();
     let lista;
-    try { lista = await Api.clientesConFaltas(est.barberia.id); } catch (e) { return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
+    try { lista = await Api.clientesConFaltas(est.barberia.id); } catch (e) { if (await sesionCaida(e)) return; return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
     const items = (lista || []).map((c) => `<div class="tarjeta" data-cliente="${esc(c.id)}">
         <p><strong>${esc(c.nombre)}</strong>${c.bloqueado ? ' <span class="estado-no_vino">Bloqueado</span>' : ''}<br>
           <small>${esc(faltasTexto(c.faltas))}</small></p>
@@ -289,7 +304,7 @@ const Panel = (() => {
   }
 
   async function desbloquear(id) {
-    try { await Api.desbloquear(id); } catch (e) { return pantallaFaltas(Html.mensajeError(e.codigo)); }
+    try { await Api.desbloquear(id); } catch (e) { if (await sesionCaida(e)) return; return pantallaFaltas(Html.mensajeError(e.codigo)); }
     pantallaFaltas();
   }
 
@@ -324,15 +339,15 @@ const Panel = (() => {
   async function iniciar() {
     cargando();
     let sesion;
-    try { sesion = await Api.sesion(); } catch (e) { return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
+    try { sesion = await Api.sesion(); } catch (e) { if (await sesionCaida(e)) return; return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
     if (!sesion) return pantallaLogin();
-    try { est.barberia = await Api.miBarberia(); } catch (e) { return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
+    try { est.barberia = await Api.miBarberia(); } catch (e) { if (await sesionCaida(e)) return; return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
     if (!est.barberia) {
       vista().innerHTML = `<h1>Sin barbería</h1><p class="sub">Tu usuario todavía no tiene una barbería asignada.</p>
         <button class="boton secundario" type="button" data-act="salir">Salir</button>`;
       return;
     }
-    try { est.servicios = (await Api.servicios.listar(est.barberia.id)).filter((s) => s.activo); } catch (e) { return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
+    try { est.servicios = (await Api.servicios.listar(est.barberia.id)).filter((s) => s.activo); } catch (e) { if (await sesionCaida(e)) return; return pantallaErrorCarga(Html.mensajeError(e.codigo)); }
     const d = new URLSearchParams(location.search).get('d');
     est.fecha = d && FECHA_OK.test(d) ? d : Fechas.hoy(zona());
     cargarAgenda();
