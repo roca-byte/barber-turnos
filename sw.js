@@ -7,13 +7,14 @@
  *
  * Los datos (turnos, servicios) NO se guardan acá: viven en Supabase y se piden siempre.
  */
-const VERSION = 'barber-turnos-v1';
+const VERSION = 'barber-turnos-v2';
 
 // RUTAS RELATIVAS: en GitHub Pages la app está en /barber-turnos/, no en la raíz del dominio.
-// index.html y panel.html se suman en las tareas 8 y 9 (addAll falla si falta uno: mejor
-// no listar páginas que todavía no existen).
+// panel.html se suma en la tarea 9 (addAll falla si falta un archivo: mejor no listar
+// páginas que todavía no existen).
 const ARCHIVOS = [
   './',
+  './index.html',
   './css/styles.css',
   './js/config.js',
   './js/html.js',
@@ -21,6 +22,7 @@ const ARCHIVOS = [
   './js/agenda.js',
   './js/telefono.js',
   './js/api.js',
+  './js/reserva.js',
   './vendor/supabase.js',
   './vendor/qrcode.js',
   './manifest.json',

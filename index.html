@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reservá tu turno</title>
+  <meta name="theme-color" content="#14181f">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+  <main class="contenedor" id="vista" aria-live="polite">Cargando…</main>
+
+  <!-- Orden: supabase y config antes de Api; reserva.js arranca la pantalla al final. -->
+  <script src="./vendor/supabase.js"></script>
+  <script src="./js/config.js"></script>
+  <script src="./js/html.js"></script>
+  <script src="./js/fechas.js"></script>
+  <script src="./js/telefono.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/reserva.js"></script>
+  <script>
+    // Para que abra sin señal una vez cargada. Si falla (http, navegador viejo) la página anda igual.
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(function () {});
+  </script>
+</body>
+</html>
