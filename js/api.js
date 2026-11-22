@@ -95,6 +95,13 @@ const Api = (() => {
     actualizar: (id, datos) => ok(db().from('horarios').update(datos).eq('id', id).select().single()),
     borrar: (id) => ok(db().from('horarios').delete().eq('id', id))
   };
+  // El barbero al que pertenecen los horarios: el primer activo por creado (igual criterio que
+  // barbero_principal en la base). Las franjas nuevas necesitan su id además del de la barbería.
+  const barberoPrincipal = async (barberiaId) => {
+    const filas = await ok(db().from('barberos').select('id').eq('barberia_id', barberiaId).eq('activo', true)
+      .order('creado').order('id').limit(1));
+    return filas[0] || null;
+  };
   // Ajustes = columnas editables de barberias (el plan y el slug no se tocan desde acá).
   const ajustes = {
     ver: miBarberia,
@@ -105,7 +112,7 @@ const Api = (() => {
     barberia, dias, horarios, reservar, verTurno, cancelarTurno,
     entrar, salir, sesion, miBarberia,
     agendaDia, turnoManual, bloquear, borrarBloqueo, marcarTurno, clientesConFaltas, desbloquear,
-    servicios, horariosSemana, ajustes,
+    servicios, horariosSemana, barberoPrincipal, ajustes,
     _aError: aError // expuesto solo para poder probar la conversión de errores
   };
 })();

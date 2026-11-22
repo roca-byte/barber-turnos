@@ -130,6 +130,7 @@ const Panel = (() => {
         <button class="boton" type="button" data-act="nuevo-turno">+ Turno</button>
         <button class="boton secundario" type="button" data-act="bloquear">Bloquear</button>
         <button class="boton secundario" type="button" data-act="faltas">Clientes con faltas</button>
+        <button class="boton secundario" type="button" data-act="config">Configuración</button>
       </div>
       <div id="agenda">${items || '<p class="sub">No hay nada cargado para este día.</p>'}</div>`;
     est.aviso = '';
@@ -329,6 +330,7 @@ const Panel = (() => {
     'quitar-bloqueo': (el) => quitarBloqueo(el.dataset.id),
     'cancelar-afectado': (el) => cancelarAfectado(el.dataset.id),
     faltas: () => pantallaFaltas(),
+    config: () => ConfigPanel.abrir(),
     desbloquear: (el) => desbloquear(el.dataset.id),
     volver: () => cargarAgenda(),
     salir,
@@ -364,5 +366,7 @@ const Panel = (() => {
   });
 
   iniciar();
-  return { iniciar };
+  // Lo que necesita config-panel.js (otro script): el estado, el manejo de sesión vencida y
+  // cómo volver a la agenda. Se comparte en vez de duplicar sesionCaida.
+  return { iniciar, ctx: { est, sesionCaida, aviso, cargando, volver: () => cargarAgenda() } };
 })();

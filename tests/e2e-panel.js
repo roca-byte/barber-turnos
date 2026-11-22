@@ -10,8 +10,10 @@ const V = verificador();
 const ok = V.ok;
 
 const BARBERIA = {
-  id: 'b1', slug: 'lo-de-tito', nombre: 'Lo de Tito', zona_horaria: 'America/Argentina/Buenos_Aires',
-  codigo_area: '11', whatsapp: '5491155550000'
+  id: 'b1', slug: 'prueba', nombre: 'Lo de Tito', zona_horaria: 'America/Argentina/Buenos_Aires',
+  codigo_area: '11', whatsapp: '5491155550000', direccion: 'Calle 1', plan: 'gratis',
+  cancelacion_horas: 2, faltas_max: 2, dias_adelante: 21, anticipacion_min: 30, paso_min: 15,
+  turnos_futuros_max: 2, reservas_por_hora_ip: 3
 };
 const SERVICIOS = [
   { id: 's1', barberia_id: 'b1', nombre: 'Corte', duracion_min: 30, precio: 8000, activo: true, orden: 0 },
@@ -28,6 +30,8 @@ const copia = (o) => JSON.parse(JSON.stringify(o));
 
 // Simula supabase-js: login por contraseña y las lecturas de tablas que hace Api.
 async function simular(page, { clave = 'secreta', agenda } = {}) {
+  // Estado de las tablas de esta página: lo que se lee y lo que se escribe (pedidos).
+  page.tablas = { servicios: copia(SERVICIOS), horarios: [], barberia: copia(BARBERIA), pedidos: [], demora: 0 };
   await page.route('**/auth/v1/token*', async r => {
     if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
     const c = r.request().postDataJSON();
@@ -38,10 +42,36 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
       refresh_token: 'ref', user: { id: 'u1', email: c.email, aud: 'authenticated', role: 'authenticated', app_metadata: {}, user_metadata: {}, created_at: '2026-01-01T00:00:00Z' }
     }));
   });
-    await page.route('**/rest/v1/{barberias,servicios,miembros}*', async r => {
+  await page.route('**/rest/v1/{barberias,servicios,miembros,horarios,barberos}*', async r => {
     if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
-    const t = new URL(r.request().url()).pathname.split('/').pop();
-    r.fulfill(json(t === 'barberias' ? [BARBERIA] : t === 'servicios' ? SERVICIOS : [{ barberia_id: 'b1' }]));
+    const req = r.request();
+    const t = new URL(req.url()).pathname.split('/').pop();
+    const metodo = req.method();
+    const st = page.tablas;
+    if (metodo === 'GET') {
+      return r.fulfill(json(t === 'barberias' ? [st.barberia] : t === 'servicios' ? st.servicios.slice().sort((a, b) => a.orden - b.orden) : t === 'horarios' ? st.horarios
+        : t === 'barberos' ? [{ id: 'br1' }] : [{ barberia_id: 'b1' }]));
+    }
+    // Escrituras: se anotan (y se pueden demorar) y se contesta como PostgREST con .select().single().
+    const cuerpo = metodo === 'DELETE' ? null : req.postDataJSON();
+    const q = new URL(req.url()).search;
+    st.pedidos.push({ metodo, tabla: t, q, cuerpo });
+    if (st.demora) await pausa(st.demora);
+    if (metodo === 'DELETE') {
+      const l = t === 'servicios' ? st.servicios : st.horarios;
+      const i = l.findIndex(x => x.id === (q.match(/id=eq\.([^&]+)/) || [])[1]);
+      if (i >= 0) l.splice(i, 1);
+      return r.fulfill({ status: 204, headers: CORS });
+    }
+    const id = (q.match(/id=eq\.([^&]+)/) || [])[1] || 'nuevo' + st.pedidos.length;
+    const lista = t === 'servicios' ? st.servicios : st.horarios;
+    const previa = (t === 'barberias' ? st.barberia : lista.find(x => x.id === id)) || {};
+    const fila = Object.assign({}, previa, cuerpo, { id });
+    // La "base" recuerda lo escrito, así una recarga de la pantalla ve el cambio.
+    if (t === 'barberias') st.barberia = fila;
+    else if (metodo === 'POST') lista.push(fila);
+    else if (metodo === 'PATCH') lista[lista.findIndex(x => x.id === id)] = fila;
+    r.fulfill(json(fila));
   });
 }
 
@@ -58,8 +88,8 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
     ...extra
   });
   // Abre el panel ya logueado.
-  async function logueado(ruta, rpc, opciones) {
-    const page = await abrir(browser, BASE, ruta, rpc, (p) => simular(p, opciones));
+  async function logueado(ruta, rpc, opciones, despues) {
+    const page = await abrir(browser, BASE, ruta, rpc, async (p) => { await simular(p, opciones); if (despues) await despues(p); });
     await page.fill('#email', 'tito@ejemplo.com');
     await page.fill('#clave', 'secreta');
     await page.click('#btn-entrar');
@@ -342,6 +372,221 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
   await pausa(300);
   ok(page.confirmaciones.length === 1 && borrados.length === 1 && borrados[0] === 'DELETE ?id=eq.bl1', '"Quitar bloqueo" confirma y borra el bloqueo con su id: ' + borrados.join(','));
   ok(page.llamadas.agenda_dia.length === 2, 'después de quitarlo se vuelve a pedir la agenda');
+  await page.context().close();
+
+
+  // ════ Configuración ════
+  const pedidos = (p, tabla, metodo) => p.tablas.pedidos.filter(x => x.tabla === tabla && (!metodo || x.metodo === metodo));
+  async function configuracion(opciones, despues) {
+    const p = await logueado('panel.html', rpcBase(), opciones, despues);
+    await p.click('[data-act="config"]');
+    await p.waitForSelector('#menu-config');
+    return p;
+  }
+  const mensaje = (p, texto) => p.waitForFunction((x) => document.getElementById('vista').textContent.includes(x), texto);
+
+  console.log('Configuración: menú');
+  page = await configuracion();
+  t = await vista(page);
+  ok(['Servicios', 'Horario semanal', 'Ajustes', 'Mi link', 'Notificaciones'].every(x => t.includes(x)), 'el menú ofrece Servicios, Horario semanal, Ajustes, Mi link y Notificaciones');
+  ok(await page.locator('#notificaciones').count() === 1, 'hay un contenedor #notificaciones para el aviso de la tarea siguiente');
+  const bajos = await page.$$eval('#vista button, #vista a.boton', (els) => els.filter(e => e.getBoundingClientRect().height < 47.5).map(e => e.textContent.trim()));
+  ok(bajos.length === 0, 'todos los botones del menú miden 48 px o más: ' + bajos.join(','));
+  await page.click('[data-act="cfg-agenda"]');
+  await page.waitForSelector('#agenda');
+  ok(true, '"Volver" regresa a la agenda');
+  ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
+  await page.context().close();
+
+  console.log('Configuración: servicios');
+  page = await configuracion();
+  await page.click('[data-act="cfg-servicios"]');
+  await page.waitForSelector('[data-servicio="s1"]');
+  ok((await vista(page)).includes('Corte y barba') && (await vista(page)).includes('45 min'), 'lista los servicios con su duración');
+  await page.click('[data-act="cfg-servicio-nuevo"]');
+  await page.fill('#nombre', 'Perfilado');
+  await page.fill('#duracion', '0');
+  await page.click('#btn-guardar-servicio');
+  await mensaje(page, 'de 5 en 5');
+  ok(pedidos(page, 'servicios').length === 0 && await page.inputValue('#nombre') === 'Perfilado', 'servicio con 0 minutos: avisa, no guarda y conserva lo escrito');
+  await page.fill('#duracion', '17');
+  await page.click('#btn-guardar-servicio');
+  await pausa(100);
+  ok(pedidos(page, 'servicios').length === 0, 'servicio con 17 minutos (no múltiplo de 5): no guarda');
+  await page.fill('#duracion', '245');
+  await page.click('#btn-guardar-servicio');
+  await pausa(100);
+  ok(pedidos(page, 'servicios').length === 0, 'servicio de más de 240 minutos: no guarda');
+  await page.fill('#duracion', '20');
+  await page.fill('#precio', 'mucho');
+  await page.click('#btn-guardar-servicio');
+  await pausa(100);
+  ok(pedidos(page, 'servicios').length === 0, 'precio que no es número: no guarda');
+  await page.fill('#precio', '3500,50');
+  await page.dblclick('#btn-guardar-servicio');
+  await page.waitForSelector('[data-servicio="nuevo1"]');
+  const crear = pedidos(page, 'servicios', 'POST');
+  ok(crear.length === 1 && crear[0].cuerpo.nombre === 'Perfilado' && crear[0].cuerpo.duracion_min === 20 && crear[0].cuerpo.precio === 3500.5
+    && crear[0].cuerpo.barberia_id === 'b1' && crear[0].cuerpo.activo === true && crear[0].cuerpo.orden === 2,
+    'servicio válido: un solo POST (el doble toque no duplica) con barbería, duración, precio y orden al final: ' + JSON.stringify(crear.map(c => c.cuerpo)));
+  // Editar: sin precio y oculto.
+  await page.click('[data-servicio="s1"] [data-act="cfg-servicio-editar"]');
+  await page.waitForSelector('#form-servicio');
+  ok(await page.inputValue('#nombre') === 'Corte' && await page.inputValue('#duracion') === '30', 'editar abre el formulario con los datos del servicio');
+  await page.fill('#precio', '');
+  await page.uncheck('#activo');
+  await page.click('#btn-guardar-servicio');
+  await page.waitForSelector('[data-servicio="s1"]');
+  const edit = pedidos(page, 'servicios', 'PATCH')[0];
+  ok(edit.q.includes('id=eq.s1') && edit.cuerpo.precio === null && edit.cuerpo.activo === false && edit.cuerpo.duracion_min === 30,
+    'editar hace PATCH del servicio: precio vacío = null y activo = false');
+  ok((await page.textContent('[data-servicio="s1"]')).includes('Oculto'), 'un servicio inactivo se marca como oculto');
+  // Orden con flechas.
+  const antes = pedidos(page, 'servicios').length;
+  await page.click('[data-servicio="s2"] [data-act="cfg-servicio-subir"]');
+  await page.waitForFunction(() => document.querySelector('[data-servicio]').dataset.servicio === 's2');
+  const mov = pedidos(page, 'servicios', 'PATCH').slice(antes - 1);
+  ok(mov.some(x => x.q.includes('id=eq.s2') && x.cuerpo.orden === 0) && mov.some(x => x.q.includes('id=eq.s1') && x.cuerpo.orden === 1),
+    'subir un servicio intercambia los órdenes con el de arriba');
+  ok(await page.locator('[data-servicio]:first-of-type [data-act="cfg-servicio-subir"][disabled]').count() === 1, 'el primero no puede subir');
+  ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
+  await page.context().close();
+
+  console.log('Configuración: servicio con texto raro');
+  page = await configuracion();
+  page.tablas.servicios[0].nombre = feo;
+  await page.click('[data-act="cfg-servicios"]');
+  await page.waitForSelector('[data-servicio="s1"]');
+  await page.click('[data-servicio="s1"] [data-act="cfg-servicio-editar"]');
+  await pausa(200);
+  ok(await page.locator('#vista img').count() === 0 && page.alertas.length === 0 && await page.inputValue('#nombre') === feo, 'el nombre del servicio se escapa en la lista y en el formulario');
+  await page.context().close();
+
+  console.log('Configuración: horario semanal');
+  page = await configuracion();
+  page.tablas.horarios = [{ id: 'h1', barberia_id: 'b1', barbero_id: 'br1', dia_semana: 1, desde: '09:00:00', hasta: '13:00:00' }];
+  await page.click('[data-act="cfg-horario"]');
+  await page.waitForSelector('[data-franja]');
+  ok(await page.locator('[data-franja]').count() === 1 && await page.inputValue('[data-franja] [data-campo="desde"]') === '09:00', 'muestra las franjas guardadas (09:00 sin segundos)');
+  ok((await page.textContent('#vista')).indexOf('Lunes') < (await page.textContent('#vista')).indexOf('Domingo'), 'la semana empieza el lunes y termina el domingo');
+  await page.click('[data-act="cfg-franja-agregar"][data-dia="2"]');
+  await page.fill('[data-dia-card="2"] [data-campo="desde"]', '13:00');
+  await page.fill('[data-dia-card="2"] [data-campo="hasta"]', '09:00');
+  await page.click('#btn-guardar-horario');
+  await mensaje(page, 'después');
+  ok(pedidos(page, 'horarios').length === 0, 'franja 13:00–09:00: avisa y no guarda nada');
+  ok(await page.inputValue('[data-dia-card="2"] [data-campo="desde"]') === '13:00', 'el aviso no borra lo que escribiste');
+  await page.fill('[data-dia-card="2"] [data-campo="desde"]', '09:00');
+  await page.fill('[data-dia-card="2"] [data-campo="hasta"]', '13:00');
+  await page.click('[data-act="cfg-franja-agregar"][data-dia="2"]');
+  await page.locator('[data-dia-card="2"] [data-campo="desde"]').nth(1).fill('12:00');
+  await page.locator('[data-dia-card="2"] [data-campo="hasta"]').nth(1).fill('15:00');
+  await page.click('#btn-guardar-horario');
+  await mensaje(page, 'se pisan');
+  ok(pedidos(page, 'horarios').length === 0, 'dos franjas que se pisan el mismo día: avisa y no guarda');
+  await page.locator('[data-dia-card="2"] [data-campo="desde"]').nth(1).fill('');
+  await page.click('#btn-guardar-horario');
+  await mensaje(page, 'Completá');
+  ok(pedidos(page, 'horarios').length === 0, 'franja con una hora vacía: avisa y no guarda');
+  // Válido: 2 de 9 a 13 y de 16 a 20; el lunes se saca.
+  await page.locator('[data-dia-card="2"] [data-campo="desde"]').nth(1).fill('16:00');
+  await page.locator('[data-dia-card="2"] [data-campo="hasta"]').nth(1).fill('20:00');
+  await page.click('[data-dia-card="1"] [data-act="cfg-franja-sacar"]');
+  await page.dblclick('#btn-guardar-horario');
+  await mensaje(page, 'Horario guardado');
+  const hp = pedidos(page, 'horarios');
+  const post = hp.filter(x => x.metodo === 'POST').map(x => x.cuerpo);
+  ok(post.length === 2 && post.every(c => c.barberia_id === 'b1' && c.barbero_id === 'br1' && c.dia_semana === 2) && post[0].desde === '09:00' && post[1].hasta === '20:00',
+    'guarda las franjas nuevas con barberia_id y barbero_id del barbero principal (una sola vez): ' + JSON.stringify(post));
+  ok(hp.filter(x => x.metodo === 'DELETE').length === 1 && hp.find(x => x.metodo === 'DELETE').q.includes('id=eq.h1'), 'la franja que sacaste se borra');
+  ok(await page.locator('[data-franja]').count() === 2, 'después de guardar se recarga con lo guardado');
+  ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
+  await page.context().close();
+
+  console.log('Configuración: ajustes');
+  page = await configuracion();
+  await page.click('[data-act="cfg-ajustes"]');
+  await page.waitForSelector('#form-ajustes');
+  ok(await page.locator('#form-ajustes .ayuda').count() >= 8 && await page.inputValue('#paso_min') === '15' && await page.inputValue('#nombre') === 'Lo de Tito',
+    'muestra los ajustes actuales, cada uno con su explicación');
+  ok(await page.locator('#plan, [name="plan"]').count() === 0, 'el plan no se puede editar');
+  await page.fill('#paso_min', '3');
+  await page.click('#btn-guardar-ajustes');
+  await mensaje(page, 'Paso de la grilla');
+  ok(pedidos(page, 'barberias').length === 0, 'paso de 3 minutos (fuera de 5 a 60): avisa y no guarda');
+  const malos = { dias_adelante: '0', faltas_max: '0', turnos_futuros_max: '0', reservas_por_hora_ip: '0', cancelacion_horas: '-1', anticipacion_min: '-5', codigo_area: '0', paso_min: '61' };
+  await page.fill('#paso_min', '15');
+  for (const [campo, valor] of Object.entries(malos)) {
+    await page.fill('#' + campo, valor);
+    await page.click('#btn-guardar-ajustes');
+    await pausa(60);
+    ok(pedidos(page, 'barberias').length === 0, `${campo} = ${valor} no guarda`);
+    await page.fill('#' + campo, campo === 'codigo_area' ? '11' : '2');
+  }
+  await page.fill('#whatsapp', '12');
+  await page.click('#btn-guardar-ajustes');
+  await mensaje(page, 'Revisá el número de WhatsApp');
+  await page.fill('#whatsapp', '011 15 5555-1234');
+  await page.fill('#zona_horaria', 'Marte/Olimpo');
+  await page.click('#btn-guardar-ajustes');
+  await mensaje(page, 'zona horaria');
+  ok(pedidos(page, 'barberias').length === 0, 'WhatsApp o zona horaria inválidos: no guardan');
+  await page.fill('#zona_horaria', 'America/Argentina/Cordoba');
+  await page.fill('#nombre', 'Tito Barber');
+  await page.fill('#paso_min', '30');
+  await page.fill('#direccion', '');
+  await page.dblclick('#btn-guardar-ajustes');
+  await mensaje(page, 'Ajustes guardados');
+  const pb = pedidos(page, 'barberias');
+  const cb = pb[0].cuerpo;
+  ok(pb.length === 1 && pb[0].q.includes('id=eq.b1') && cb.nombre === 'Tito Barber' && cb.paso_min === 30 && cb.direccion === null
+    && cb.whatsapp === '5491155551234' && cb.zona_horaria === 'America/Argentina/Cordoba' && cb.codigo_area === '11' && cb.dias_adelante === 2,
+    'guarda una sola vez, con números y el WhatsApp normalizado: ' + JSON.stringify(cb));
+  const permitidas = ['nombre', 'direccion', 'whatsapp', 'zona_horaria', 'codigo_area', 'cancelacion_horas', 'faltas_max', 'dias_adelante', 'anticipacion_min', 'paso_min', 'turnos_futuros_max', 'reservas_por_hora_ip'];
+  ok(Object.keys(cb).every(k => permitidas.includes(k)) && Object.keys(cb).length === permitidas.length, 'solo manda columnas que la base deja editar (sin plan, slug ni id)');
+  await page.context().close();
+
+  console.log('Configuración: mi link y QR');
+  const copiados = [];
+  page = await configuracion(undefined, async (p) => {
+    await p.addInitScript(() => { window.__copiado = []; window.__impreso = 0; window.print = () => { window.__impreso++; };
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: (x) => { window.__copiado.push(x); return Promise.resolve(); } }, configurable: true }); });
+  });
+  await page.click('[data-act="cfg-link"]');
+  await page.waitForSelector('#hoja-qr');
+  const enlace = `http://127.0.0.1:${srv.address().port}${PREFIJO}index.html?b=prueba`;
+  ok((await page.textContent('#link-texto')).trim() === enlace, 'muestra el link absoluto de la barbería (index.html?b=prueba): ' + (await page.textContent('#link-texto')).trim());
+  ok(await page.locator('#hoja-qr svg, #hoja-qr canvas, #hoja-qr img').count() === 1, 'dibuja el QR');
+  ok(await page.locator('#hoja-qr svg path').count() === 1 && (await page.getAttribute('#hoja-qr svg path', 'd')).length > 500, 'el QR tiene módulos dibujados');
+  await page.click('[data-act="cfg-copiar"]');
+  await mensaje(page, 'Copiado');
+  ok((await page.evaluate(() => window.__copiado))[0] === enlace, '"Copiar" pone el link en el portapapeles');
+  await page.click('[data-act="cfg-imprimir"]');
+  ok(await page.evaluate(() => window.__impreso) === 1, '"Imprimir" abre el diálogo de impresión');
+  await page.emulateMedia({ media: 'print' });
+  const visible = (sel) => page.evaluate((s) => { const e = document.querySelector(s); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0; }, sel);
+  ok(await visible('#hoja-qr') && await visible('#hoja-qr svg') && !(await visible('#link-texto')) && !(await visible('[data-act="cfg-imprimir"]')) && !(await visible('h1')),
+    'al imprimir queda solo la hoja con el QR (sin botones, título ni link)');
+  const hoja = await page.textContent('#hoja-qr');
+  ok(hoja.includes('Lo de Tito') && hoja.includes('Sacá tu turno acá'), 'la hoja dice el nombre de la barbería y "Sacá tu turno acá"');
+  await page.emulateMedia({ media: 'screen' });
+  ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
+  await page.context().close();
+
+  console.log('Configuración: sesión vencida y errores');
+  page = await configuracion();
+  await page.route('**/rest/v1/servicios*', r => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS })
+    : r.fulfill(json({ code: 'PGRST301', message: 'JWT expired', details: null, hint: null }, 401)));
+  await page.click('[data-act="cfg-servicios"]');
+  await page.waitForSelector('#btn-entrar');
+  ok((await vista(page)).includes('Tu sesión se cerró'), 'sesión vencida en una pantalla de configuración: vuelve al ingreso');
+  await page.context().close();
+
+  page = await configuracion();
+  await page.route('**/rest/v1/horarios*', r => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS }) : r.fulfill(json({ message: 'boom' }, 500)));
+  await page.click('[data-act="cfg-horario"]');
+  await page.waitForSelector('[data-act="reintentar-config"]');
+  ok(await page.locator('[data-act="cfg-menu"]').count() === 1, 'un error al cargar muestra Reintentar y volver al menú');
   await page.context().close();
 
   await browser.close();

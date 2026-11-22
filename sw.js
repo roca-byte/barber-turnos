@@ -7,7 +7,7 @@
  *
  * Los datos (turnos, servicios) NO se guardan acá: viven en Supabase y se piden siempre.
  */
-const VERSION = 'barber-turnos-v4';
+const VERSION = 'barber-turnos-v5';
 
 // RUTAS RELATIVAS: en GitHub Pages la app está en /barber-turnos/, no en la raíz del dominio.
 const ARCHIVOS = [
@@ -23,6 +23,7 @@ const ARCHIVOS = [
   './js/api.js',
   './js/reserva.js',
   './js/panel.js',
+  './js/config-panel.js',
   './vendor/supabase.js',
   './vendor/qrcode.js',
   './manifest.json',
