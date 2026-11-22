@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ícono original: tijera abierta sobre fondo oscuro. Fondo completo (sin esquinas
+       transparentes) y figura dentro del 70% central, para que Android lo recorte como adaptable. -->
+  <rect width="512" height="512" fill="#14181f"/>
+  <g fill="none" stroke="#f2b84b" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <!-- hojas cruzadas -->
+    <line x1="168" y1="120" x2="344" y2="330"/>
+    <line x1="344" y1="120" x2="168" y2="330"/>
+    <!-- anillos -->
+    <circle cx="150" cy="368" r="42"/>
+    <circle cx="362" cy="368" r="42"/>
+  </g>
+</svg>
