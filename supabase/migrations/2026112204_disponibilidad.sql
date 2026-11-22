@@ -64,7 +64,9 @@ begin
          generate_series(p_fecha + f.desde, p_fecha + f.hasta - v_dur,
                          make_interval(mins => v_barberia.paso_min)) as g(t)
   )
-  select c.inicio
+  -- distinct: si el dueño carga franjas que se superponen (09-13 y 10-12), el mismo
+  -- inicio saldría repetido.
+  select distinct c.inicio
   from candidato c
   where (p_ignorar_reglas or c.inicio >= app.ahora() + make_interval(mins => v_barberia.anticipacion_min))
     -- Rangos [inicio, fin): un turno que termina justo cuando empieza otro no se pisa.
@@ -95,14 +97,14 @@ grant execute on function public.disponibilidad(text, uuid, date) to anon, authe
 create or replace function public.dias_disponibles(p_slug text, p_servicio uuid)
 returns setof date
 language sql stable security definer set search_path = public, app as $$
-  select d::date
+  -- Se suma i a la fecha local de la barbería: aritmética de fechas pura, sin pasar por
+  -- timestamptz (donde la zona de la sesión o un cambio de horario podrían correr el día).
+  select ((app.ahora() at time zone b.zona_horaria)::date + i) as d
   from public.barberias b,
-       lateral generate_series(
-         (app.ahora() at time zone b.zona_horaria)::date,
-         (app.ahora() at time zone b.zona_horaria)::date + b.dias_adelante,
-         interval '1 day') d
+       lateral generate_series(0, b.dias_adelante) i
   where b.slug = p_slug and b.activa
-    and exists (select 1 from app.slots(app.barbero_principal(b.id), p_servicio, d::date))
+    and exists (select 1 from app.slots(app.barbero_principal(b.id), p_servicio,
+                                        (app.ahora() at time zone b.zona_horaria)::date + i))
   order by d
 $$;
 revoke execute on function public.dias_disponibles(text, uuid) from public;

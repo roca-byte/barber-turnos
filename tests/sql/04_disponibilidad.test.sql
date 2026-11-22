@@ -74,6 +74,35 @@ begin
 end $$;
 delete from bloqueos;
 
+-- ---------- franjas superpuestas: sin horarios repetidos ----------
+-- Si el dueño carga 09-13 y 10-12 el mismo día, 10:00 saldría dos veces sin `distinct`.
+insert into horarios (id, barberia_id, barbero_id, dia_semana, desde, hasta)
+values ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-0000000000a2', 2, '10:00', '12:00');
+do $$
+declare v timestamptz[];
+begin
+  select array_agg(x) into v from public.disponibilidad('aaa', '00000000-0000-0000-0000-0000000000a3'::uuid, '2026-12-01') x;
+  assert array_length(v, 1) = 22, 'franjas superpuestas: siguen 22, hubo ' || array_length(v, 1);
+  assert (select count(distinct x) from unnest(v) x) = array_length(v, 1), 'sin repetidos';
+  assert (select count(*) from app.slots('00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-0000000000a3', '2026-12-01')) = 22,
+    'app.slots tampoco repite';
+end $$;
+delete from horarios where id = '00000000-0000-0000-0000-0000000000d1';
+
+-- ---------- turno de OTRO barbero de la misma barbería ----------
+-- Hoy se agenda con el principal: el turno de un barbero secundario no le tapa horarios.
+insert into turnos (barberia_id, barbero_id, servicio_id, inicio, fin, origen, nombre_manual)
+values ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-0000000000a9', '00000000-0000-0000-0000-0000000000a3',
+        '2026-12-01 10:00-03', '2026-12-01 10:30-03', 'manual', 'otro barbero');
+do $$
+declare v timestamptz[];
+begin
+  select array_agg(x) into v from public.disponibilidad('aaa', '00000000-0000-0000-0000-0000000000a3'::uuid, '2026-12-01') x;
+  assert array_length(v, 1) = 22 and '2026-12-01 10:00-03'::timestamptz = any(v),
+    'el turno de otro barbero no bloquea al principal';
+end $$;
+delete from turnos where nombre_manual = 'otro barbero';
+
 -- ---------- servicio de 60 min ----------
 do $$
 declare v timestamptz[];
