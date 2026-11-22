@@ -1,6 +1,6 @@
 # barber-turnos — Diseño
 
-Fecha: 2026-11-22. Estado: borrador para aprobar.
+Fecha: 2026-11-22. Estado: listo para aprobar.
 
 ## 1. Por qué existe
 
@@ -122,6 +122,11 @@ cualquiera costaba más que hacerlo a medida. Se toma de ellos solo el modelo co
   cancelación libre hasta **2 h** antes; bloqueo tras **2** faltas; se reserva hasta
   **21 días** adelante; no se reserva con menos de **30 min** de anticipación; los slots
   se ofrecen cada **15 min**; máximo **2 turnos futuros** por número (anti-spam).
+- **Reservas falsas (decidido con el usuario: límites simples)**: máximo de turnos
+  futuros por número (2) + tope de **3 reservas online por hora por conexión** (IP tomada
+  de `x-forwarded-for` en `request.headers` dentro de `reservar`, guardada en una tabla
+  chica de intentos). Si alguien molesta igual, el barbero cancela a mano. Sin captcha en
+  v1; Cloudflare Turnstile se suma antes de abrir a barberías desconocidas.
 - **Faltas**: el barbero las marca a mano ("no vino") desde la agenda, también en turnos
   manuales que tengan WhatsApp (sin WhatsApp no hay cliente al que contarle). Se pueden
   deshacer. El conteo se calcula desde los turnos `no_vino` posteriores al último
