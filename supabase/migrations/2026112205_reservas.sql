@@ -35,10 +35,13 @@ declare
   v_barberia public.barberias%rowtype;
   v_servicio public.servicios%rowtype;
   v_barbero uuid;
-  v_nombre text := trim(coalesce(p_nombre, ''));
+  -- btrim por defecto solo saca espacios: se agregan tab, salto de línea y retorno para que
+  -- un nombre de solo "\n\t" no pase como válido.
+  v_nombre text := btrim(coalesce(p_nombre, ''), E' \t\r\n\f\v');
   v_tel text;
   v_cliente public.clientes%rowtype;
   v_ip text;
+  v_headers json;
   v_token text;
 begin
   select * into v_barberia from public.barberias where slug = p_slug and activa;
@@ -72,7 +75,10 @@ begin
 
   insert into public.clientes (barberia_id, telefono, nombre)
   values (v_barberia.id, v_tel, v_nombre)
-  on conflict (barberia_id, telefono) do update set nombre = excluded.nombre
+  -- El nombre ya guardado no se pisa: si no, cualquiera que conozca el teléfono de otro
+  -- podría cambiarle el nombre que ve la barbería. (El update vacío es para que
+  -- `returning` devuelva la fila existente.)
+  on conflict (barberia_id, telefono) do update set nombre = public.clientes.nombre
   returning * into v_cliente;
 
   if app.faltas(v_cliente.id) >= v_barberia.faltas_max then
@@ -85,10 +91,17 @@ begin
     raise exception 'LIMITE_TURNOS';
   end if;
 
-  -- IP: primer elemento de x-forwarded-for (el cliente real; el resto son proxies).
-  v_ip := coalesce(nullif(trim(split_part(
-            coalesce(nullif(current_setting('request.headers', true), '')::json ->> 'x-forwarded-for', ''),
-            ',', 1)), ''), 'desconocida');
+  -- IP del cliente. El primer elemento de x-forwarded-for lo escribe el propio cliente
+  -- (se puede falsificar y rotar para saltear el límite). Detrás de Cloudflare la IP
+  -- confiable es cf-connecting-ip; si no viene, el ÚLTIMO elemento de x-forwarded-for,
+  -- que es el que agregó el proxy de confianza más cercano. Sin nada: 'desconocida'.
+  -- OJO: hay que verificar en el Supabase real qué cabeceras llegan realmente.
+  v_headers := nullif(current_setting('request.headers', true), '')::json;
+  v_ip := coalesce(
+    nullif(trim(v_headers ->> 'cf-connecting-ip'), ''),
+    nullif(trim((string_to_array(coalesce(v_headers ->> 'x-forwarded-for', ''), ','))[
+             coalesce(array_length(string_to_array(coalesce(v_headers ->> 'x-forwarded-for', ''), ','), 1), 1)]), ''),
+    'desconocida');
 
   -- Cuentan también los turnos ya cancelados: cancelar y reservar en bucle sigue siendo spam.
   if (select count(*) from public.turnos t

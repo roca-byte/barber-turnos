@@ -33,8 +33,8 @@ create function pg_temp.res_err(hora text, nombre text, tel text) returns text l
 $$;
 
 -- ---------- reserva feliz ----------
--- x-forwarded-for trae la cadena de proxies: vale solo el primero.
-select set_config('request.headers', '{"x-forwarded-for":"1.2.3.4, 10.0.0.1"}', false);
+-- x-forwarded-for trae la cadena de proxies: vale el ÚLTIMO (el primero lo escribe el cliente).
+select set_config('request.headers', '{"x-forwarded-for":"9.9.9.9, 1.2.3.4"}', false);
 select pg_temp.res('10:00', '  Juan Pérez ', '011 15 1234-5678') as tok \gset t1_
 do $$
 declare t public.turnos; c public.clientes;
@@ -72,6 +72,7 @@ begin
   assert pg_temp.res_err('11:00', 'Pedro', null) = 'TELEFONO_INVALIDO', 'teléfono null';
   assert pg_temp.res_err('11:00', ' ', '011 15 2222-3333') = 'NOMBRE_INVALIDO', 'nombre en blanco';
   assert pg_temp.res_err('11:00', 'P', '011 15 2222-3333') = 'NOMBRE_INVALIDO', 'nombre de 1 letra';
+  assert pg_temp.res_err('11:00', E'\n\t \r\n', '011 15 2222-3333') = 'NOMBRE_INVALIDO', 'nombre de solo tabs y saltos';
   assert pg_temp.res_err('11:00', null, '011 15 2222-3333') = 'NOMBRE_INVALIDO', 'nombre null';
   assert pg_temp.res_err('11:00', repeat('x', 61), '011 15 2222-3333') = 'NOMBRE_INVALIDO', 'nombre de 61';
   assert pg_temp.res_err('11:00', repeat('x', 60), '011 15 2222-3333') is null, 'nombre de 60 vale';
@@ -88,6 +89,12 @@ delete from clientes where telefono = '5491122223333' and not exists (select 1 f
 -- ---------- límite de turnos futuros por cliente ----------
 select set_config('request.headers', '{"x-forwarded-for":"2.2.2.2"}', false);
 select pg_temp.res('11:00', 'Juan', '011 15 1234-5678') as tok \gset t2_
+-- El nombre guardado de un cliente conocido no se pisa con otra reserva.
+do $$
+begin
+  assert (select nombre from public.clientes where telefono = '5491112345678') = 'Juan Pérez', 'nombre sin cambios';
+end $$;
+
 select set_config('request.headers', '{"x-forwarded-for":"3.3.3.3"}', false);
 do $$
 begin
@@ -95,13 +102,19 @@ begin
 end $$;
 
 -- ---------- límite por hora por IP ----------
-select set_config('request.headers', '{"x-forwarded-for":"9.9.9.9, 10.0.0.1"}', false);
+select set_config('request.headers', '{"x-forwarded-for":"7.7.0.1, 9.9.9.9"}', false);
 select pg_temp.res('16:00', 'Ana', '011 15 4000-0001') as tok \gset t3_
 select pg_temp.res('16:30', 'Beto', '011 15 4000-0002') as tok \gset t4_
 select pg_temp.res('17:00', 'Carla', '011 15 4000-0003') as tok \gset t5_
 do $$
 begin
   assert pg_temp.res_err('17:30', 'Dani', '011 15 4000-0004') = 'LIMITE_HORA', 'cuarta de la misma IP en la hora';
+  -- Rotar el elemento izquierdo (falsificable) no saltea el límite.
+  perform set_config('request.headers', '{"x-forwarded-for":"6.6.0.2, 9.9.9.9"}', false);
+  assert pg_temp.res_err('17:30', 'Dani', '011 15 4000-0004') = 'LIMITE_HORA', 'rotar la IP izquierda no sirve';
+  -- cf-connecting-ip manda sobre x-forwarded-for.
+  perform set_config('request.headers', '{"cf-connecting-ip":"9.9.9.9","x-forwarded-for":"1.1.1.1"}', false);
+  assert pg_temp.res_err('17:30', 'Dani', '011 15 4000-0004') = 'LIMITE_HORA', 'cf-connecting-ip cuenta';
 end $$;
 -- Otra IP no se ve afectada.
 select set_config('request.headers', '{"x-forwarded-for":"8.8.8.8"}', false);
@@ -112,6 +125,21 @@ select set_config('request.headers', '{"x-forwarded-for":"9.9.9.9"}', false);
 select pg_temp.res('12:30', 'Eli', '011 15 4000-0005') as tok \gset t7_
 select set_config('app.ahora', '2026-12-01 08:00-03', false);
 delete from turnos where cliente_id in (select id from clientes where telefono in ('5491140000001','5491140000002','5491140000003','5491140000004','5491140000005'));
+
+-- ---------- cf-connecting-ip ----------
+select set_config('request.headers', '{"cf-connecting-ip":" 5.5.5.5 ","x-forwarded-for":"9.9.9.9"}', false);
+select pg_temp.res('12:00', 'Cf', '011 15 5100-0001') as tok \gset tcf_
+do $$
+begin
+  assert (select ip_origen from public.turnos where inicio = '2026-12-01 12:00-03') = '5.5.5.5', 'cf-connecting-ip gana';
+end $$;
+select set_config('request.headers', '{"cf-connecting-ip":"","x-forwarded-for":"9.9.9.9, 1.2.3.4"}', false);
+select pg_temp.res('12:30', 'Cf', '011 15 5100-0002') as tok \gset tcf2_
+do $$
+begin
+  assert (select ip_origen from public.turnos where inicio = '2026-12-01 12:30-03') = '1.2.3.4', 'cf vacío: último de xff';
+end $$;
+delete from turnos where inicio in ('2026-12-01 12:00-03', '2026-12-01 12:30-03');
 
 -- ---------- sin cabecera de IP ----------
 select set_config('request.headers', '', false);
@@ -166,8 +194,8 @@ begin
   assert (v->>'inicio')::timestamptz = '2026-12-01 10:00-03', 'inicio';
   assert (v->>'fin')::timestamptz = '2026-12-01 10:30-03', 'fin';
   assert v->>'servicio' = 'Corte', 'servicio';
-  -- La segunda reserva del mismo número (como 'Juan') actualizó el nombre del cliente.
-  assert v->>'cliente_nombre' = 'Juan', 'cliente_nombre actualizado por el upsert';
+  -- La segunda reserva del mismo número (como 'Juan') NO cambió el nombre guardado.
+  assert v->>'cliente_nombre' = 'Juan Pérez', 'el nombre guardado no se pisa';
   assert (v->>'puede_cancelar')::boolean, 'a 2 h 30 min: se puede cancelar';
   assert v->'barberia'->>'nombre' = 'Barbería A' and v->'barberia'->>'direccion' = 'Calle 1'
      and v->'barberia'->>'whatsapp' = '5491100000000' and v->'barberia'->>'slug' = 'aaa'
