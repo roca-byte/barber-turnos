@@ -3,7 +3,7 @@
 ## Pruebas
 
 ```
-node --test tests/          # reglas puras en JS
+node --test tests/*.test.js   # reglas puras en JS
 node tests/sql/correr.js    # base de datos (esquema, funciones, RLS)
 node tests/sql/correr.js --solo 01_esquema.test.sql   # una sola prueba SQL
 ```
