@@ -86,3 +86,9 @@ test('el resultado no depende de la zona de la máquina (TZ=UTC y TZ=Asia/Tokyo)
   const [h, i, d, s] = JSON.parse(salidas[0]);
   assert.deepStrictEqual([h, i, d, s], ['10:00', '2026-12-01T12:00:00.000Z', 'martes 1 de diciembre', '2027-01-01']);
 });
+
+test('fecha: el día de calendario de un instante en la zona dada', () => {
+  // 02:30Z del 2/12 sigue siendo el 1/12 en Buenos Aires (23:30) y ya es 2/12 en Tokyo.
+  assert.strictEqual(Fechas.fecha('2026-12-02T02:30:00Z', 'America/Argentina/Buenos_Aires'), '2026-12-01');
+  assert.strictEqual(Fechas.fecha('2026-12-02T02:30:00Z', 'Asia/Tokyo'), '2026-12-02');
+});

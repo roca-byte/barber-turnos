@@ -120,3 +120,20 @@ h2 { font-size: 1.15rem; margin: 20px 0 8px; }
 .estado-no_vino, .estado-cancelado { color: var(--mal); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Panel del barbero */
+.barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.barra h1 { margin: 0; }
+.boton.chico { width: auto; }
+.dias { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 8px; margin: 12px 0 0; }
+.dias .boton + .boton { margin-top: 0; }
+.dia-titulo { text-transform: capitalize; text-align: center; }
+.herramientas { display: grid; gap: 8px; margin: 0 0 16px; }
+.herramientas .boton + .boton { margin-top: 0; }
+.turno { padding: 8px; }
+.turno .opcion { margin: 0; border: 0; background: transparent; }
+.turno.abierto { border-color: var(--acento); }
+.faltas { color: var(--mal); font-weight: 700; white-space: nowrap; }
+.acciones { padding: 8px 8px 4px; }
+.hueco { border-style: dashed; color: var(--gris); }
+.bloqueo { display: grid; gap: 8px; border-style: dashed; }

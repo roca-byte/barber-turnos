@@ -32,6 +32,13 @@ const Fechas = (() => {
     return `${p.a}-${dos(p.m)}-${dos(p.d)}`;
   }
 
+  // Día de calendario (AAAA-MM-DD) que tiene un instante en la zona dada. Lo usa el panel
+  // para decir "el martes 1 de diciembre" de un turno sin depender de la zona del celular.
+  function fecha(isoInstante, zona) {
+    const p = partes(Date.parse(isoInstante), zona);
+    return `${p.a}-${dos(p.m)}-${dos(p.d)}`;
+  }
+
   // La fecha es de calendario (sin zona): se arma en UTC solo para hacer la cuenta.
   function aUtc(fechaISO) {
     const [a, m, d] = fechaISO.split('-').map(Number);
@@ -86,7 +93,7 @@ const Fechas = (() => {
     return h;
   }
 
-  return { hora, hoy, sumarDias, diaLargo, instante, ics };
+  return { hora, fecha, hoy, sumarDias, diaLargo, instante, ics };
 })();
 
 if (typeof module !== 'undefined') module.exports = Fechas;
