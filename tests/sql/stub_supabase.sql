@@ -22,3 +22,13 @@ $$;
 
 grant usage on schema auth to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
+
+-- Supabase le da por defecto a anon y authenticated todos los permisos sobre lo que se
+-- crea en public. Se imita igual para que lo que proteja los datos sea RLS (y los revoke
+-- explícitos de las migraciones), no la falta de permisos del banco de pruebas.
+-- `default privileges` alcanza las tablas y funciones que las migraciones creen después.
+grant usage on schema public to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant execute on functions to anon, authenticated, service_role;

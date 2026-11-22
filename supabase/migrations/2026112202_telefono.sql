@@ -7,8 +7,8 @@ language plpgsql
 immutable
 as $$
 declare
-  d text := regexp_replace(coalesce(texto, ''), '\D', '', 'g');
-  area text := regexp_replace(coalesce(codigo_area, ''), '\D', '', 'g');
+  d text := regexp_replace(coalesce(texto, ''), '[^0-9]', '', 'g');
+  area text := regexp_replace(coalesce(codigo_area, ''), '[^0-9]', '', 'g');
   n int;
 begin
   if d like '00%' then d := substr(d, 3); end if;
