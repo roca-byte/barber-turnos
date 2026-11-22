@@ -29,6 +29,6 @@ grant execute on function auth.uid() to anon, authenticated, service_role;
 -- `default privileges` alcanza las tablas y funciones que las migraciones creen después.
 grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public
-  grant select, insert, update, delete on tables to anon, authenticated, service_role;
+  grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public
   grant execute on functions to anon, authenticated, service_role;

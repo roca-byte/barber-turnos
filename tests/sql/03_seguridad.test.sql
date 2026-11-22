@@ -62,9 +62,9 @@ begin
                            'clientes','turnos','push_suscripciones'] loop
     begin
       execute format('select count(*) from %I', t) into n;
-      assert n = 0, 'anon vio filas de ' || t;
+      assert false, 'anon pudo leer ' || t;
     exception when insufficient_privilege then
-      null; -- también vale: ni siquiera tiene permiso
+      null; -- esperado: ni siquiera tiene permiso
     end;
   end loop;
   -- Tampoco puede escribir.
@@ -172,6 +172,31 @@ begin
   begin
     update servicios set barberia_id = '00000000-0000-0000-0000-00000000000b' where nombre = 'Nuevo';
     assert false, 'uA pudo mover un servicio a B';
+  exception when insufficient_privilege then null;
+  end;
+  -- Ajustes sí; plan, activa y slug no (solo el alta con service_role).
+  update barberias set cancelacion_horas = 5 where id = '00000000-0000-0000-0000-00000000000a';
+  get diagnostics n = row_count;
+  assert n = 1, 'uA debía poder cambiar cancelacion_horas';
+  begin
+    update barberias set plan = 'pro' where id = '00000000-0000-0000-0000-00000000000a';
+    assert false, 'uA pudo cambiar plan';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update barberias set activa = false where id = '00000000-0000-0000-0000-00000000000a';
+    assert false, 'uA pudo cambiar activa';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    update barberias set slug = 'robado' where id = '00000000-0000-0000-0000-00000000000a';
+    assert false, 'uA pudo cambiar slug';
+  exception when insufficient_privilege then null;
+  end;
+  -- TRUNCATE no pasa por RLS: no debe tener el permiso.
+  begin
+    truncate turnos;
+    assert false, 'uA pudo hacer truncate';
   exception when insufficient_privilege then null;
   end;
   -- barberias: sin insert ni delete.
@@ -293,3 +318,27 @@ begin
   t := public.prueba_insertar_turno();
   assert length(t) >= 32 and t ~ '^[0-9a-f]+$', 'token inválido: ' || t;
 end $$;
+
+-- Una función creada DESPUÉS de la migración no es ejecutable por anon ni authenticated
+-- hasta que alguien le haga grant explícito.
+create function public.prueba_nueva() returns int language sql as 'select 1';
+begin;
+set local role anon;
+do $$ begin
+  begin
+    perform public.prueba_nueva();
+    assert false, 'anon pudo ejecutar una función nueva sin grant';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+rollback;
+begin;
+set local role authenticated;
+do $$ begin
+  begin
+    perform public.prueba_nueva();
+    assert false, 'authenticated pudo ejecutar una función nueva sin grant';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+rollback;

@@ -108,6 +108,30 @@ alter default privileges in schema public revoke all on tables from anon;
 revoke insert, delete on barberias from authenticated;
 revoke insert, update, delete on miembros from authenticated;
 
+-- Supabase da ALL a anon/authenticated, y TRUNCATE no pasa por RLS: un usuario
+-- logueado podría vaciar la tabla de TODAS las barberías. Se quitan, en lo que existe
+-- y en lo que se cree después.
+revoke truncate, references, trigger on all tables in schema public from anon, authenticated;
+alter default privileges in schema public
+  revoke truncate, references, trigger on tables from anon, authenticated;
+
+-- El dueño edita ajustes y datos de contacto, pero no plan, activa, slug ni id: el plan
+-- habilitará funciones pagas y activa/slug las maneja el alta (service_role).
+revoke update on barberias from authenticated;
+grant update (nombre, direccion, whatsapp, zona_horaria, codigo_area, cancelacion_horas,
+              faltas_max, dias_adelante, anticipacion_min, paso_min, turnos_futuros_max,
+              reservas_por_hora_ip)
+  on barberias to authenticated;
+
+-- Toda función nueva de public nace SIN execute para nadie (Supabase se lo da a anon y
+-- authenticated por defecto). Las migraciones siguientes que creen una RPC tienen que
+-- hacer `grant execute ... to <rol>` explícito, como barberia_publica más abajo.
+-- (El execute implícito de PUBLIC es un default global: solo se quita sin `in schema`.
+-- Vale para lo que cree el rol que corre las migraciones, y también para el esquema app.)
+alter default privileges revoke execute on functions from public;
+alter default privileges in schema public
+  revoke execute on functions from anon, authenticated;
+
 -- ---------- 6. Datos públicos de la barbería ----------
 -- Lo único que ve el público anónimo. security definer porque anon no lee tablas.
 -- Devuelve solo lo necesario para mostrar y reservar (nunca ajustes internos ni plan).
