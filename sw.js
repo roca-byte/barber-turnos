@@ -7,7 +7,7 @@
  *
  * Los datos (turnos, servicios) NO se guardan acá: viven en Supabase y se piden siempre.
  */
-const VERSION = 'barber-turnos-v6';
+const VERSION = 'barber-turnos-v7';
 
 // RUTAS RELATIVAS: en GitHub Pages la app está en /barber-turnos/, no en la raíz del dominio.
 const ARCHIVOS = [
@@ -24,6 +24,7 @@ const ARCHIVOS = [
   './js/reserva.js',
   './js/panel.js',
   './js/config-panel.js',
+  './js/push.js',
   './vendor/supabase.js',
   './vendor/qrcode.js',
   './manifest.json',
@@ -65,5 +66,34 @@ self.addEventListener('fetch', (e) => {
         return respuesta;
       })
       .catch(() => caches.match(e.request, { ignoreSearch: true }).then((r) => r || caches.match('./')))
+  );
+});
+
+// ---------- Notificaciones push ----------
+// El servidor (supabase/functions/notificar) manda {titulo, cuerpo, url}. Si el payload viene
+// roto igual se muestra algo: una push sin notificación visible hace que el navegador la penalice.
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { /* payload ilegible: se usa el texto por defecto */ }
+  e.waitUntil(self.registration.showNotification(d.titulo || 'Barber Turnos', {
+    body: d.cuerpo || '',
+    data: { url: d.url || './panel.html' },
+    icon: './icons/icon-192.png',
+    badge: './icons/icon-192.png'
+  }));
+});
+
+// La url llega relativa ('./panel.html?d=...'): se resuelve contra el scope del service worker
+// (no contra la página que esté abierta). Si ya hay una ventana del panel, se la reutiliza.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const destino = new URL((e.notification.data && e.notification.data.url) || './panel.html', self.registration.scope).href;
+  const panel = new URL('./panel.html', self.registration.scope).pathname;
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((ventanas) => {
+      const abierta = ventanas.find((v) => new URL(v.url).pathname === panel);
+      if (abierta) return abierta.navigate(destino).then((c) => (c || abierta).focus()).catch(() => abierta.focus());
+      return self.clients.openWindow(destino);
+    })
   );
 });

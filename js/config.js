@@ -4,7 +4,9 @@
 // Se completa con los valores reales al publicar (Task 12).
 const Config = {
   url: '<SUPABASE_URL>',
-  clavePublica: '<PUBLISHABLE_KEY>'
+  clavePublica: '<PUBLISHABLE_KEY>',
+  // Clave PÚBLICA VAPID de las notificaciones push (la privada vive solo como secreto de la función).
+  clavePublicaVapid: '<VAPID_PUBLICA>'
 };
 
 if (typeof module !== 'undefined') module.exports = Config;

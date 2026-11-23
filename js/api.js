@@ -108,11 +108,26 @@ const Api = (() => {
     guardar: (barberiaId, datos) => ok(db().from('barberias').update(datos).eq('id', barberiaId).select().single())
   };
 
+  // Suscripción push de este dispositivo. La RLS exige user_id = auth.uid() y ser miembro;
+  // upsert por endpoint: re-activar en el mismo navegador no duplica la fila.
+  const push = {
+    async guardar(barberiaId, sub) {
+      const s = await sesion();
+      if (!s) throw aError({ message: 'NO_AUTORIZADO' });
+      const j = sub.toJSON();
+      return ok(db().from('push_suscripciones').upsert({
+        user_id: s.user.id, barberia_id: barberiaId, endpoint: j.endpoint,
+        p256dh: j.keys.p256dh, auth: j.keys.auth
+      }, { onConflict: 'endpoint' }));
+    },
+    borrar: (endpoint) => ok(db().from('push_suscripciones').delete().eq('endpoint', endpoint))
+  };
+
   return {
     barberia, dias, horarios, reservar, verTurno, cancelarTurno,
     entrar, salir, sesion, miBarberia,
     agendaDia, turnoManual, bloquear, borrarBloqueo, marcarTurno, clientesConFaltas, desbloquear,
-    servicios, horariosSemana, barberoPrincipal, ajustes,
+    servicios, horariosSemana, barberoPrincipal, ajustes, push,
     _aError: aError // expuesto solo para poder probar la conversión de errores
   };
 })();

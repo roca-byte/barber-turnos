@@ -389,7 +389,11 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
   page = await configuracion();
   t = await vista(page);
   ok(['Servicios', 'Horario semanal', 'Ajustes', 'Mi link', 'Notificaciones'].every(x => t.includes(x)), 'el menú ofrece Servicios, Horario semanal, Ajustes, Mi link y Notificaciones');
-  ok(await page.locator('#notificaciones').count() === 1, 'hay un contenedor #notificaciones para el aviso de la tarea siguiente');
+  ok(await page.locator('#notificaciones').count() === 1, 'hay un contenedor #notificaciones');
+  await page.waitForSelector('#notif-texto');
+  const estadoNotif = await page.evaluate(() => Push.estado());
+  ok(['inactivo', 'bloqueado', 'no-soportado'].includes(estadoNotif), 'Push.estado() da un estado válido en Chromium sin permiso: ' + estadoNotif);
+  ok((await page.textContent('#notificaciones')).length > 10, 'Notificaciones muestra un texto de estado');
   const bajos = await page.$$eval('#vista button, #vista a.boton', (els) => els.filter(e => e.getBoundingClientRect().height < 47.5).map(e => e.textContent.trim()));
   ok(bajos.length === 0, 'todos los botones del menú miden 48 px o más: ' + bajos.join(','));
   await page.click('[data-act="cfg-agenda"]');
