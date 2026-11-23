@@ -573,6 +573,30 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
   ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
   await page.context().close();
 
+  console.log('Configuración: horario con falla a medias');
+  page = await configuracion();
+  page.tablas.horarios = [{ id: 'h1', barberia_id: 'b1', barbero_id: 'br1', dia_semana: 1, desde: '09:00:00', hasta: '13:00:00' }];
+  await page.click('[data-act="cfg-horario"]');
+  await page.waitForSelector('[data-franja]');
+  let lecturas = 0;
+  await page.route('**/rest/v1/horarios*', async (r, ) => {
+    const m = r.request().method();
+    if (m === 'OPTIONS') return r.fulfill({ status: 204, headers: CORS });
+    if (m === 'GET') { lecturas++; return r.fulfill(json(page.tablas.horarios)); }
+    page.tablas.pedidos.push({ metodo: m, tabla: 'horarios' });
+    const n = page.tablas.pedidos.filter(x => x.tabla === 'horarios').length;
+    if (n === 2) return r.fulfill(json({ message: 'boom' }, 500));
+    r.fulfill(m === 'DELETE' ? { status: 204, headers: CORS } : json({ id: 'x' }));
+  });
+  await page.click('[data-franja] [data-act="cfg-franja-sacar"]');
+  await page.click('[data-act="cfg-franja-agregar"][data-dia="2"]');
+  await page.click('[data-act="cfg-franja-agregar"][data-dia="3"]');
+  await page.click('#btn-guardar-horario');
+  await mensaje(page, 'No se pudo guardar todo. Revisá el horario: puede haber quedado a medias.');
+  ok(pedidos(page, 'horarios').map(x => x.metodo).join() === 'DELETE,POST', 'borra primero y recién después agrega; falla la segunda escritura');
+  ok(lecturas === 1, 'después de la falla se vuelve a leer el horario guardado');
+  await page.context().close();
+
   console.log('Configuración: sesión vencida y errores');
   page = await configuracion();
   await page.route('**/rest/v1/servicios*', r => r.request().method() === 'OPTIONS' ? r.fulfill({ status: 204, headers: CORS })

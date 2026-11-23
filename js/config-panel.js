@@ -243,17 +243,21 @@ const ConfigPanel = (() => {
     document.getElementById('btn-guardar-horario').disabled = true;
     const b = barberia().id;
     try {
+      // Primero se borra, después se cambia y al final se agrega: si algo falla a la mitad nunca
+      // quedan juntas la franja vieja y la nueva (la base no impide que se pisen).
+      for (const o of cfg.original) if (!cfg.franjas.some((f) => f.id === o.id)) await Api.horariosSemana.borrar(o.id);
       for (const f of cfg.franjas) {
         const viejo = f.id && cfg.original.find((o) => o.id === f.id);
-        if (!f.id) await Api.horariosSemana.crear({ barberia_id: b, barbero_id: cfg.barbero.id, dia_semana: f.dia, desde: f.desde, hasta: f.hasta });
-        else if (viejo.desde !== f.desde || viejo.hasta !== f.hasta) await Api.horariosSemana.actualizar(f.id, { desde: f.desde, hasta: f.hasta });
+        if (viejo && (viejo.desde !== f.desde || viejo.hasta !== f.hasta)) await Api.horariosSemana.actualizar(f.id, { desde: f.desde, hasta: f.hasta });
       }
-      for (const o of cfg.original) if (!cfg.franjas.some((f) => f.id === o.id)) await Api.horariosSemana.borrar(o.id);
+      for (const f of cfg.franjas) {
+        if (!f.id) await Api.horariosSemana.crear({ barberia_id: b, barbero_id: cfg.barbero.id, dia_semana: f.dia, desde: f.desde, hasta: f.hasta });
+      }
     } catch (err) {
       ocupado = false;
       if (await sesionCaida(err)) return;
       // Pudo quedar a medias: se recarga lo que realmente hay guardado.
-      return cargarCon(() => pantallaHorario(Html.mensajeError(err.codigo)));
+      return cargarCon(() => pantallaHorario('No se pudo guardar todo. Revisá el horario: puede haber quedado a medias.'));
     }
     ocupado = false;
     cargarCon(() => pantallaHorario('Horario guardado.', true));
@@ -338,7 +342,11 @@ const ConfigPanel = (() => {
       return mal(Html.mensajeError(err.codigo));
     }
     ocupado = false;
-    ctx().est.barberia = fila; // la agenda y +Turno usan la zona y el código de área nuevos
+    const est = ctx().est;
+    const eraHoy = est.fecha === Fechas.hoy(est.barberia.zona_horaria);
+    est.barberia = fila; // la agenda y +Turno usan la zona y el código de área nuevos
+    // Si la agenda estaba en "hoy", hoy puede ser otro día en la zona nueva.
+    if (eraHoy) est.fecha = Fechas.hoy(fila.zona_horaria);
     pantallaAjustes('Ajustes guardados.', true);
   }
 
