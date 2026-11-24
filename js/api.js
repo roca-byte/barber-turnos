@@ -8,12 +8,22 @@ const Api = (() => {
     'FUERA_DE_PLAZO', 'NO_AUTORIZADO', 'RANGO_INVALIDO', 'ESTADO_INVALIDO'];
 
   let cliente = null;
+  let publico = false;
+  // La página del cliente (index.html) se declara pública antes del primer uso: su cliente no
+  // lee ni guarda sesión. Si no, comparte el localStorage con el panel (mismo origen) y, con
+  // el barbero logueado en ese celular, las RPC públicas viajarían con su JWT: un token
+  // vencido da 401 y las reservas hechas "como barbero" no disparan el aviso de turno nuevo.
+  function modoPublico() {
+    if (cliente) throw new Error('Api.modoPublico() tiene que llamarse antes del primer uso');
+    publico = true;
+  }
   // Se crea al primer uso: así las páginas que no llaman a Api no pagan la conexión.
   function db() {
     if (!cliente) {
-      cliente = supabase.createClient(Config.url, Config.clavePublica, {
-        auth: { persistSession: true, autoRefreshToken: true }
-      });
+      const auth = publico
+        ? { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'bt-publico' }
+        : { persistSession: true, autoRefreshToken: true };
+      cliente = supabase.createClient(Config.url, Config.clavePublica, { auth });
     }
     return cliente;
   }
@@ -131,7 +141,7 @@ const Api = (() => {
     entrar, salir, sesion, miBarberia,
     agendaDia, turnoManual, bloquear, borrarBloqueo, marcarTurno, clientesConFaltas, desbloquear,
     servicios, horariosSemana, barberoPrincipal, ajustes, push, vapidPublica,
-    _aError: aError // expuesto solo para poder probar la conversión de errores
+    modoPublico, _aError: aError // expuesto solo para poder probar la conversión de errores
   };
 })();
 

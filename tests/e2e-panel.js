@@ -119,6 +119,9 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
   ok((await page.textContent('[data-turno="t1"]')).includes('10:00'), 'la hora sale en la zona de la barbería (10:00)');
   ok(await page.locator('[data-hueco]').count() === 2, 'muestra los 2 huecos libres (9:00-10:00 y 10:30-13:00)');
   ok(t.includes('⚠ 2 faltas'), 'un cliente con faltas muestra "⚠ 2 faltas"');
+  ok(await page.getAttribute('link[rel=manifest]', 'href') === './manifest-panel.json', 'el panel enlaza su propio manifest (start_url ./panel.html)');
+  ok(await page.locator('.dia-titulo').evaluate((e) => getComputedStyle(e, '::first-letter').textTransform === 'uppercase' && getComputedStyle(e).textTransform === 'none'),
+    'el título del día solo capitaliza la primera letra ("Martes 1 de diciembre")');
   ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
   await page.context().close();
 

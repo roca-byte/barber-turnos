@@ -241,3 +241,14 @@ semanal, ajustes, QR y link de la barbería, activar notificaciones.
 - Cómo se generan y guardan las claves VAPID (documentarlo en la guía).
 - Contenido de `docs/GUIA.md`: alta de barbería (paso a paso SQL/panel de Supabase),
   instalar el panel en Android e iPhone, activar notificaciones, imprimir el QR.
+
+## 9. Cambios durante la construcción
+
+- Las claves VAPID las genera el servidor y se guardan en `app.ajustes_privados`, no en
+  secretos de la Edge Function.
+- El tope por IP cuenta las reservas online exitosas por barbería (no hay tabla de intentos);
+  la IP se toma de `cf-connecting-ip`.
+- Los horarios libres se calculan solo en SQL (no existe `js/slots.js`).
+- Las faltas se calculan a partir de `turnos`.
+- `slug`, `plan` y `activa` no los edita el barbero.
+- El barbero no recibe notificación de sus propias acciones en el panel.

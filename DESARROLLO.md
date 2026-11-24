@@ -6,6 +6,9 @@
 node --test tests/*.test.js   # reglas puras en JS
 node tests/sql/correr.js    # base de datos (esquema, funciones, RLS)
 node tests/sql/correr.js --solo 01_esquema.test.sql   # una sola prueba SQL
+node tests/e2e-cliente.js   # página del cliente en Chromium, Supabase simulado
+node tests/e2e-panel.js     # panel del barbero en Chromium, Supabase simulado
+node tests/e2e-real.js <slug>   # MANUAL, usa la red: ver "Prueba contra el Supabase real"
 ```
 
 ### Banco de pruebas SQL
@@ -52,7 +55,10 @@ Las claves VAPID las genera la propia función la primera vez que recibe un pedi
 aunque sea rechazado) y las guarda con `guardar_vapid()`, junto con `vapid_contacto`. El
 navegador pide la clave pública con `vapid_publica()` (`Api.vapidPublica()`); mientras no
 exista, "Activar notificaciones" avisa que todavía no está lista. Si un día se rotan las
-claves, hay que borrar las filas `vapid_*` y todas las suscripciones, porque quedan inválidas.
+claves, hay que borrar las filas `vapid_*` y todas las suscripciones, porque quedan inválidas, y desactivar y volver a activar las notificaciones en cada celular.
+
+Desplegar con `supabase functions deploy notificar`: `supabase/config.toml` ya trae
+`verify_jwt = false` (la llama el trigger de la base con su secreto, no un JWT de usuario).
 
 Si falta el secreto o la url la función responde 500 y no manda nada. Para rotar un valor, un
 `update` y esperar hasta 5 minutos (o redesplegar la función).

@@ -12,6 +12,11 @@ const Reserva = (() => {
   const soloDigitos = (t) => String(t || '').replace(/\D/g, '');
   const urlWa = (tel, texto) => 'https://wa.me/' + soloDigitos(tel) + (texto ? '?text=' + encodeURIComponent(texto) : '');
   const plata = (n) => '$ ' + Number(n).toLocaleString('es-AR');
+  // El precio es opcional: sin precio no se muestra nada (un "$ 0" parecería gratis).
+  const tienePrecio = (s) => s.precio !== null && s.precio !== undefined;
+  // Sin WhatsApp cargado no hay a quién escribirle: wa.me/ vacío daría un link roto.
+  const botonWa = (tel, texto) => (soloDigitos(tel)
+    ? `<a class="boton secundario" href="${esc(urlWa(tel))}" target="_blank" rel="noopener">${esc(texto)}</a>` : '');
   const aviso = (msg) => (msg ? `<p class="error" role="alert">${esc(msg)}</p>` : '');
   const cargando = () => { vista().innerHTML = '<p class="sub">Cargando…</p>'; };
 
@@ -26,7 +31,7 @@ const Reserva = (() => {
     return `<header class="tarjeta">
       <h1>${esc(b.nombre)}</h1>
       <p class="sub">${esc(b.direccion)}</p>
-      <a class="boton secundario" href="${esc(urlWa(b.whatsapp))}" target="_blank" rel="noopener">Escribir por WhatsApp</a>
+      ${botonWa(b.whatsapp, 'Escribir por WhatsApp')}
     </header>`;
   }
 
@@ -48,7 +53,7 @@ const Reserva = (() => {
   function pantallaServicios() {
     const b = est.barberia;
     const items = b.servicios.map((s, i) => `<button class="opcion" type="button" data-act="servicio" data-i="${i}" data-servicio="${esc(s.id)}">
-        <span>${esc(s.nombre)}<br><small>${esc(s.duracion_min)} min</small></span><strong>${esc(plata(s.precio))}</strong></button>`).join('');
+        <span>${esc(s.nombre)}<br><small>${esc(s.duracion_min)} min</small></span>${tienePrecio(s) ? `<strong>${esc(plata(s.precio))}</strong>` : ''}</button>`).join('');
     vista().innerHTML = `${cabecera(b)}<h2>¿Qué te querés hacer?</h2>
       ${items || '<p class="sub">Todavía no hay servicios cargados.</p>'}`;
   }
@@ -96,7 +101,7 @@ const Reserva = (() => {
         <p><strong>${esc(Fechas.diaLargo(est.fecha))}</strong> a las <strong>${esc(Fechas.hora(est.inicio, zona))}</strong></p>
         <p>${esc(est.servicio.nombre)} · ${esc(est.servicio.duracion_min)} min</p>
         <p class="sub">Guardá este link: con él podés ver o cancelar tu turno.</p>
-        <p><a href="${esc(link)}">${esc(link)}</a></p>
+        <p class="enlace"><a href="${esc(link)}">${esc(link)}</a></p>
       </div>
       <button class="boton" type="button" id="btn-calendario" data-act="calendario">Agregar a mi calendario</button>
       <a class="boton secundario" id="btn-whatsapp" href="${esc(urlWa(est.telefono, link))}" target="_blank" rel="noopener">Mandarme el link por WhatsApp</a>`;
@@ -116,7 +121,7 @@ const Reserva = (() => {
       accion = '<button class="boton peligro" type="button" id="btn-cancelar" data-act="cancelar">Cancelar turno</button>';
     } else if (t.estado === 'confirmado') {
       accion = `<p class="sub">Ya no podés cancelar online. Si necesitás cambiarlo, escribile a la barbería.</p>
-        <a class="boton secundario" href="${esc(urlWa(t.barberia.whatsapp))}" target="_blank" rel="noopener">Escribir por WhatsApp</a>`;
+        ${botonWa(t.barberia.whatsapp, 'Escribir por WhatsApp')}`;
     }
     vista().innerHTML = `${cabecera(t.barberia)}${aviso(msg)}
       <div class="tarjeta">
@@ -177,9 +182,8 @@ const Reserva = (() => {
     } catch (err) {
       // Otro cliente se llevó el horario: se vuelven a pedir los horarios del día.
       if (err.codigo === 'HORARIO_NO_DISPONIBLE') await pantallaHorarios(Html.mensajeError(err.codigo));
-      else {
-        pantallaDatos(Html.mensajeError(err.codigo));
-      }
+      // Cualquier otro error: se avisa sobre el mismo formulario para no perder lo que escribió.
+      else { mostrarAvisoDatos(Html.mensajeError(err.codigo)); boton.disabled = false; }
     } finally { reservando = false; }
   }
 
@@ -232,6 +236,7 @@ const Reserva = (() => {
   document.addEventListener('submit', (e) => { if (e.target.id === 'form-datos') enviarReserva(e); });
   document.addEventListener('input', (e) => { if (e.target.id === 'telefono') actualizarTelefonoEnVivo(); });
 
+  Api.modoPublico(); // antes de cualquier llamada: esta página nunca usa la sesión del barbero
   iniciar();
   return { iniciar };
 })();

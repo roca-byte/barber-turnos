@@ -9,6 +9,7 @@ const { chromium } = require('playwright');
 const { PREFIJO, servidor, json, falla, pausa, verificador, abrir: abrirBase } = require('./e2e-util');
 
 const TOKEN = 'a'.repeat(64);
+const Html_mensaje = (c) => require('../js/html.js').mensajeError(c);
 const V = verificador();
 const ok = V.ok;
 
@@ -122,6 +123,58 @@ const abrir = abrirBase; // (browser, BASE, ruta, rpc)
   await recorrer(page, 'Ana', '123');
   await pausa(100);
   ok((await vista(page)).includes('Revisá el número de WhatsApp') && !page.llamadas.reservar, 'un teléfono inválido se avisa sin llamar al servidor');
+  await page.context().close();
+
+  // ════ Error de reserva que no es de horario ════
+  console.log('Error al reservar (límite por hora)');
+  page = await abrir(browser, BASE, '?b=lo-de-tito', { ...rpcBase, reservar: () => falla('LIMITE_HORA') });
+  await page.waitForSelector('[data-servicio="s1"]');
+  await recorrer(page, 'Ana Gómez', '1155551234');
+  await page.waitForSelector('#aviso-datos');
+  ok((await page.textContent('#aviso-datos')).includes(Html_mensaje('LIMITE_HORA')), 'LIMITE_HORA muestra su mensaje sobre el formulario');
+  ok(await page.inputValue('#nombre') === 'Ana Gómez' && await page.inputValue('#telefono') === '1155551234', 'el nombre y el teléfono siguen escritos');
+  ok(await page.isEnabled('#btn-reservar'), 'el botón Reservar vuelve a estar habilitado');
+  await page.context().close();
+
+  // ════ Link largo, precio opcional y WhatsApp vacío ════
+  console.log('Detalles de la pantalla');
+  page = await abrir(browser, BASE, '?b=lo-de-tito', rpcBase);
+  await page.waitForSelector('[data-servicio="s1"]');
+  await recorrer(page, 'Juan', '1155551234');
+  await page.waitForSelector('#btn-calendario');
+  ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'el link del turno no hace desbordar la pantalla');
+  ok(await page.locator('.tarjeta .enlace a').count() === 1, 'el link usa la clase .enlace (corta en cualquier lado)');
+  await page.context().close();
+
+  const sinExtras = { ...BARBERIA, whatsapp: '', servicios: [
+    { id: 's1', nombre: 'Corte', duracion_min: 30, precio: null },
+    { id: 's2', nombre: 'Barba', duracion_min: 20, precio: 0 }
+  ] };
+  page = await abrir(browser, BASE, '?b=lo-de-tito', { ...rpcBase, barberia_publica: () => json(sinExtras) });
+  await page.waitForSelector('[data-servicio="s1"]');
+  ok(!(await page.textContent('[data-servicio="s1"]')).includes('$'), 'servicio con precio null: no muestra "$"');
+  ok((await page.textContent('[data-servicio="s2"]')).includes('$ 0'), 'un precio 0 cargado a propósito sí se muestra');
+  ok(await page.locator('a[href^="https://wa.me/"]').count() === 0, 'sin WhatsApp de la barbería no hay botones wa.me');
+  await page.context().close();
+
+  // ════ Sesión del barbero en el mismo celular ════
+  console.log('Sesión del barbero guardada');
+  const authHeaders = [];
+  page = await abrir(browser, BASE, '?b=lo-de-tito', rpcBase, async (p, ctx) => {
+    // Sesión de panel vigente en localStorage (misma clave que usa supabase-js para esta url).
+    await ctx.addInitScript(() => {
+      localStorage.setItem('sb-falso-auth-token', JSON.stringify({
+        access_token: 'JWT-DEL-BARBERO', refresh_token: 'r', token_type: 'bearer', expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: 'u1', email: 'tito@ejemplo.com' }
+      }));
+    });
+    p.on('request', (r) => { if (r.url().includes('/rest/v1/rpc/')) authHeaders.push(r.headers()['authorization']); });
+  });
+  await page.waitForSelector('[data-servicio="s1"]');
+  await recorrer(page, 'Ana', '1155551234');
+  await page.waitForSelector('#btn-calendario');
+  ok(authHeaders.length >= 4 && authHeaders.every((h) => h === 'Bearer clave-falsa'),
+    'las RPC públicas van con la clave anon aunque haya sesión de panel: ' + [...new Set(authHeaders)].join(', '));
   await page.context().close();
 
   // ════ Ver turno ════

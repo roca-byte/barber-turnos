@@ -1,0 +1,4 @@
+# La función la llama un trigger de la base con su propio secreto (no un JWT de usuario):
+# con verify_jwt activo Supabase la rechazaría con 401.
+[functions.notificar]
+verify_jwt = false

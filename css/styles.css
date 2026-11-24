@@ -127,7 +127,9 @@ h2 { font-size: 1.15rem; margin: 20px 0 8px; }
 .boton.chico { width: auto; }
 .dias { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 8px; margin: 12px 0 0; }
 .dias .boton + .boton { margin-top: 0; }
-.dia-titulo { text-transform: capitalize; text-align: center; }
+.dia-titulo { text-align: center; }
+/* Solo la primera letra: "capitalize" daba "Martes 1 De Diciembre". */
+.dia-titulo::first-letter { text-transform: uppercase; }
 .herramientas { display: grid; gap: 8px; margin: 0 0 16px; }
 .herramientas .boton + .boton { margin-top: 0; }
 .turno { padding: 8px; }

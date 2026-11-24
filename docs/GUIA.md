@@ -110,7 +110,8 @@ barbero solo tiene que tocar **Activar notificaciones** en su celular (ver parte
 
 Si al activarlas aparece *"Las notificaciones todavía no están listas en el servidor. Probá
 más tarde."*, es porque el servidor todavía no se usó ni una vez: hacé una reserva de prueba
-desde el link del cliente (y cancelala) y probá otra vez.
+desde el link del cliente (y cancelala; aunque estés logueado en el panel de ese celular,
+las reservas del link del cliente se tratan siempre como las de un cliente y avisan) y probá otra vez.
 
 El detalle técnico y cómo se corren las pruebas están en [`DESARROLLO.md`](../DESARROLLO.md).
 
@@ -250,6 +251,9 @@ Los valores por defecto, con lo que significan:
 | Anticipación mínima (minutos) | 30 | Cuánto antes del turno se cierra la reserva. |
 | Paso de la grilla (minutos) | 15 | Cada cuántos minutos se ofrece un horario. |
 | Turnos pendientes por cliente | 2 | Cuántos turnos futuros puede tener la misma persona. |
+| Reservas por hora por conexión | 3 | Tope contra abusos: reservas online por hora desde una misma conexión a internet. |
+| Código de área | 11 | Se le agrega a los teléfonos que tus clientes escriben sin código (sin el 0 ni el 15). |
+| Zona horaria | America/Argentina/Buenos_Aires | Todas las horas se muestran en esta zona, esté donde esté el celular. |
 
 Tocá **Guardar ajustes** al terminar. No hace falta tocar nada de esto para empezar.
 
