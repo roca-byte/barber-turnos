@@ -55,6 +55,7 @@ const abrir = abrirBase; // (browser, BASE, ruta, rpc)
   await page.waitForSelector('[data-servicio="s1"]');
   let t = await vista(page);
   ok(t.includes('Lo de Tito') && t.includes('Av. Siempre Viva 123'), 'muestra nombre y dirección de la barbería');
+  ok((await page.textContent('header.marca')).trim() === 'Barber-Turnos' && await page.getAttribute('header.marca img', 'src') === './icons/icon.svg', 'muestra el logo y el nombre Barber-Turnos');
   ok(await page.locator('a[href^="https://wa.me/5491155550000"]').count() > 0, 'tiene botón de WhatsApp de la barbería');
   ok(t.includes('Corte y barba') && t.includes('45 min'), 'lista los servicios con su duración');
   await page.click('[data-servicio="s1"]');
