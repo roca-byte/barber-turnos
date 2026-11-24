@@ -23,9 +23,5 @@ $$;
 revoke execute on function public.ajustes_notificar() from public, anon, authenticated;
 grant execute on function public.ajustes_notificar() to service_role;
 
--- Filas a cargar (una sola vez, en el SQL Editor; nunca en el repo):
---   insert into app.ajustes_privados values
---     ('vapid_publica',  '<clave pública VAPID>'),
---     ('vapid_privada',  '<clave privada VAPID>'),
---     ('vapid_contacto', 'mailto:<contacto>');
--- (url_notificar y secreto_notificar ya se cargan según 2026112207.)
+-- Filas a mano: solo url_notificar y secreto_notificar (ver 2026112207). Las filas
+-- vapid_publica, vapid_privada y vapid_contacto las crea la función sola (2026112209).

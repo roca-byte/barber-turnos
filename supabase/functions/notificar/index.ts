@@ -15,17 +15,41 @@ const VIGENCIA_MS = 5 * 60 * 1000;
 let config: { secreto: string; vapid_publica: string; vapid_privada: string; vapid_contacto: string } | null = null;
 let cargadaEn = 0;
 
+// Lee la configuración de la base con la RPC. Devuelve null si falla (ya lo registró).
+async function leerAjustes() {
+  const { data, error } = await db.rpc('ajustes_notificar');
+  if (error) { console.error('ajustes_notificar', error); return null; }
+  return data ?? {};
+}
+
 // Devuelve la configuración completa o null si no se pudo cargar o falta algún campo.
 // Si falla no se usa una copia vencida: ante la duda, se rechaza (falla cerrada).
+// Las claves VAPID las genera esta función la primera vez que no las encuentra: así ninguna
+// clave privada pasa por una persona. Por eso el chequeo del secreto va DESPUÉS de cargar:
+// cualquier pedido (aunque sea sin secreto) inicializa las claves, y eso no regala nada
+// porque el pedido igual se rechaza con 401 y la clave pública es pública.
 async function cargarConfig() {
   if (config && Date.now() - cargadaEn < VIGENCIA_MS) return config;
   config = null;
-  const { data, error } = await db.rpc('ajustes_notificar');
-  if (error) { console.error('ajustes_notificar', error); return null; }
-  const faltan = ['secreto', 'vapid_publica', 'vapid_privada', 'vapid_contacto'].filter((k) => !data?.[k]);
+  let data = await leerAjustes();
+  if (!data) return null;
+  if (!data.vapid_publica || !data.vapid_privada) {
+    const claves = webpush.generateVAPIDKeys();
+    const { error } = await db.rpc('guardar_vapid', { p_publica: claves.publicKey, p_privada: claves.privateKey });
+    if (error) { console.error('guardar_vapid', error); return null; }
+    // Otra instancia pudo ganar la carrera: se usa siempre lo que devuelve la base, no lo generado.
+    data = await leerAjustes();
+    if (!data) return null;
+  }
+  const faltan = ['secreto', 'vapid_publica', 'vapid_privada', 'vapid_contacto'].filter((k) => !data[k]);
   if (faltan.length) { console.error('ajustes_notificar: faltan', faltan.join(', ')); return null; }
-  // Se registra una vez por carga, no por pedido.
-  webpush.setVapidDetails(data.vapid_contacto, data.vapid_publica, data.vapid_privada);
+  // Se registra una vez por carga, no por pedido. Si las claves están rotas no se tira la función.
+  try {
+    webpush.setVapidDetails(data.vapid_contacto, data.vapid_publica, data.vapid_privada);
+  } catch (e) {
+    console.error('setVapidDetails', e);
+    return null;
+  }
   config = data;
   cargadaEn = Date.now();
   return config;

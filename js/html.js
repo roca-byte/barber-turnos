@@ -23,7 +23,8 @@ const Html = (() => {
     FUERA_DE_PLAZO: 'Ya no se puede cancelar online. Escribile a la barbería por WhatsApp.',
     NO_AUTORIZADO: 'No tenés permiso para hacer eso. Volvé a ingresar.',
     RANGO_INVALIDO: 'El rango de fechas no es válido: el fin tiene que ser después del inicio.',
-    ESTADO_INVALIDO: 'Ese estado no es válido para el turno.'
+    ESTADO_INVALIDO: 'Ese estado no es válido para el turno.',
+    PUSH_NO_LISTO: 'Las notificaciones todavía no están listas en el servidor. Probá más tarde.'
   };
   const GENERICO = 'Algo salió mal. Probá de nuevo.';
 

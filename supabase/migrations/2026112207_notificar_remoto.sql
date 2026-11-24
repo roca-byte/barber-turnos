@@ -2,11 +2,12 @@
 -- SOLO PARA EL SUPABASE REAL (sufijo _remoto): usa pg_net, que no existe en el Postgres local,
 -- así que tests/sql/correr.js no la corre. Se aplica a mano en el SQL Editor (Task 12).
 --
--- Antes de usarla hay que cargar dos filas en app.ajustes_privados (ver README / DESARROLLO):
+-- Antes de usarla hay que cargar DOS filas en app.ajustes_privados, y solo esas (en el SQL
+-- Editor; el secreto se genera en SQL, nunca se escribe ni se pega):
 --   insert into app.ajustes_privados values
---     ('url_notificar',    'https://<proyecto>.supabase.co/functions/v1/notificar'),
---     ('secreto_notificar', '<secreto compartido, lo lee la función por ajustes_notificar()>');
--- Las filas vapid_publica, vapid_privada y vapid_contacto las describe 2026112208.
+--     ('url_notificar',     'https://<proyecto>.supabase.co/functions/v1/notificar'),
+--     ('secreto_notificar', encode(gen_random_bytes(32), 'hex'));
+-- Las claves VAPID las genera la función sola (2026112209); ver también 2026112208.
 
 create extension if not exists pg_net;
 

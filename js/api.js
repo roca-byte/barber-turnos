@@ -123,11 +123,14 @@ const Api = (() => {
     borrar: (endpoint) => ok(db().from('push_suscripciones').delete().eq('endpoint', endpoint))
   };
 
+  // Clave pública VAPID (la genera el servidor; null mientras no exista). No es secreta.
+  const vapidPublica = async () => (await rpc('vapid_publica', {})) || null;
+
   return {
     barberia, dias, horarios, reservar, verTurno, cancelarTurno,
     entrar, salir, sesion, miBarberia,
     agendaDia, turnoManual, bloquear, borrarBloqueo, marcarTurno, clientesConFaltas, desbloquear,
-    servicios, horariosSemana, barberoPrincipal, ajustes, push,
+    servicios, horariosSemana, barberoPrincipal, ajustes, push, vapidPublica,
     _aError: aError // expuesto solo para poder probar la conversión de errores
   };
 })();

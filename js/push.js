@@ -1,5 +1,5 @@
 // push.js — activar o apagar los avisos de turnos nuevos/cancelados en ESTE dispositivo.
-// Necesita: js/config.js (clavePublicaVapid), js/api.js (Api.push), js/html.js y config-panel.js
+// Necesita: js/api.js (Api.push y Api.vapidPublica), js/html.js y config-panel.js
 // (se engancha en ConfigPanel.alDibujarMenu para llenar el bloque "Notificaciones").
 // El envío real lo hace la función de Supabase `notificar`; acá solo se guarda la suscripción.
 const Push = (() => {
@@ -45,12 +45,20 @@ const Push = (() => {
 
   async function activar(barberiaId) {
     if (previo() && previo() !== 'bloqueado') throw new Error('NO_SOPORTADO');
+    // La clave pública la genera el servidor la primera vez que la función corre: si todavía
+    // no existe se avisa antes de pedir permiso, para no gastar el permiso del usuario en vano.
+    const clave = await Api.vapidPublica();
+    if (!clave) {
+      const e = new Error('PUSH_NO_LISTO');
+      e.codigo = 'PUSH_NO_LISTO';
+      throw e;
+    }
     const permiso = await Notification.requestPermission();
     if (permiso !== 'granted') throw new Error('PERMISO_DENEGADO');
     const reg = await navigator.serviceWorker.ready;
     const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({
       userVisibleOnly: true, // obligatorio: cada push tiene que mostrar una notificación
-      applicationServerKey: urlBase64ToUint8Array(Config.clavePublicaVapid)
+      applicationServerKey: urlBase64ToUint8Array(clave)
     });
     try {
       await Api.push.guardar(barberiaId, sub);
@@ -93,7 +101,9 @@ const Push = (() => {
       } catch (e) {
         const msg = cont.querySelector('#notif-error');
         msg.textContent = e.message === 'PERMISO_DENEGADO'
-          ? 'No diste permiso para las notificaciones.' : 'No pudimos cambiar las notificaciones. Probá de nuevo.';
+          ? 'No diste permiso para las notificaciones.'
+          : e.codigo === 'PUSH_NO_LISTO' ? Html.mensajeError('PUSH_NO_LISTO')
+          : 'No pudimos cambiar las notificaciones. Probá de nuevo.';
         msg.hidden = false;
         b.disabled = false;
         if (e.message !== 'PERMISO_DENEGADO') return;

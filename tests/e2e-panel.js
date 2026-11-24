@@ -85,6 +85,8 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
     agenda_dia: () => json(copia(AGENDA)),
     marcar_turno: () => json(null),
     clientes_con_faltas: () => json([]),
+    // Clave pública VAPID inventada: la usa Push.activar (en estas pruebas no se llega a suscribir).
+    vapid_publica: () => json('BPublicaDePrueba'),
     ...extra
   });
   // Abre el panel ya logueado.

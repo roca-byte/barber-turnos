@@ -38,17 +38,21 @@ las funciones usan `app.ahora()` en vez de `now()`.
 
 La Edge Function no usa secretos propios: lee su configuración de `app.ajustes_privados`
 con `public.ajustes_notificar()` (solo `service_role` la ejecuta) y la guarda 5 minutos en
-memoria. Se cargan en el SQL Editor del Supabase real, una sola vez y nunca en el repo,
-después de aplicar `2026112207` y `2026112208` (ambas `_remoto`):
+memoria. Se aplican `2026112207`, `2026112208` y `2026112209` (las tres `_remoto`) en el SQL
+Editor del Supabase real. A mano se cargan solo DOS filas, una sola vez y nunca en el repo; el
+secreto se genera en SQL, no se escribe ni se pega en ningún lado:
 
 ```
 insert into app.ajustes_privados values
   ('url_notificar',     'https://<proyecto>.supabase.co/functions/v1/notificar'),
-  ('secreto_notificar', '<secreto compartido, uno largo y al azar>'),
-  ('vapid_publica',     '<clave pública VAPID>'),
-  ('vapid_privada',     '<clave privada VAPID>'),
-  ('vapid_contacto',    'mailto:<contacto>');
+  ('secreto_notificar', encode(gen_random_bytes(32), 'hex'));
 ```
 
-Si falta alguna fila la función responde 500 y no manda nada. Para rotar un valor, un
+Las claves VAPID las genera la propia función la primera vez que recibe un pedido (cualquiera,
+aunque sea rechazado) y las guarda con `guardar_vapid()`, junto con `vapid_contacto`. El
+navegador pide la clave pública con `vapid_publica()` (`Api.vapidPublica()`); mientras no
+exista, "Activar notificaciones" avisa que todavía no está lista. Si un día se rotan las
+claves, hay que borrar las filas `vapid_*` y todas las suscripciones, porque quedan inválidas.
+
+Si falta el secreto o la url la función responde 500 y no manda nada. Para rotar un valor, un
 `update` y esperar hasta 5 minutos (o redesplegar la función).
