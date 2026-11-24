@@ -7,7 +7,7 @@
  *
  * Los datos (turnos, servicios) NO se guardan acá: viven en Supabase y se piden siempre.
  */
-const VERSION = 'barber-turnos-v12';
+const VERSION = 'barber-turnos-v13';
 
 // RUTAS RELATIVAS: en GitHub Pages la app está en /barber-turnos/, no en la raíz del dominio.
 const ARCHIVOS = [
@@ -76,7 +76,7 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch (_) { /* payload ilegible: se usa el texto por defecto */ }
-  e.waitUntil(self.registration.showNotification(d.titulo || 'Barber Turnos', {
+  e.waitUntil(self.registration.showNotification(d.titulo || 'Barber-Turnos', {
     body: d.cuerpo || '',
     data: { url: d.url || './panel.html' },
     icon: './icons/icon-192.png',

@@ -1,6 +1,6 @@
 {
-  "name": "Panel de turnos",
-  "short_name": "Panel",
+  "name": "Barber-Turnos",
+  "short_name": "Barber-Turnos",
   "description": "Agenda de turnos de tu barbería.",
   "lang": "es-AR",
   "start_url": "./panel.html",

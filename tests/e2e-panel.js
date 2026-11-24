@@ -120,6 +120,7 @@ async function simular(page, { clave = 'secreta', agenda } = {}) {
   ok(await page.locator('[data-hueco]').count() === 2, 'muestra los 2 huecos libres (9:00-10:00 y 10:30-13:00)');
   ok(t.includes('⚠ 2 faltas'), 'un cliente con faltas muestra "⚠ 2 faltas"');
   ok(await page.getAttribute('link[rel=manifest]', 'href') === './manifest-panel.json', 'el panel enlaza su propio manifest (start_url ./panel.html)');
+  ok((await page.textContent('header.marca')).trim() === 'Barber-Turnos' && await page.getAttribute('header.marca img', 'src') === './icons/icon.svg', 'el panel muestra el logo y el nombre Barber-Turnos');
   ok(await page.locator('.dia-titulo').evaluate((e) => getComputedStyle(e, '::first-letter').textTransform === 'uppercase' && getComputedStyle(e).textTransform === 'none'),
     'el título del día solo capitaliza la primera letra ("Martes 1 de diciembre")');
   ok(page.errores.length === 0, 'sin errores de JavaScript: ' + page.errores.join(' | '));
