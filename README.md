@@ -12,11 +12,16 @@ Supabase (Postgres con RLS y funciones). Sin cuentas para el cliente.
 - Cliente: `https://roca-byte.github.io/barber-turnos/index.html?b=<slug>`
 - Panel del barbero: `https://roca-byte.github.io/barber-turnos/panel.html`
 
+<p align="center"><img src="docs/img/demo.gif" alt="Un cliente reserva y el barbero lo ve en su agenda" width="280"></p>
+
+Videos de 1 y casi 3 minutos: [cómo reserva el cliente](docs/video/cliente-reserva.mp4) y
+[el panel del barbero](docs/video/panel-barbero.mp4).
+
 ## Documentación
 
-- [`docs/GUIA.md`](docs/GUIA.md): guía de uso para el administrador (alta de barberías,
-  publicar en GitHub Pages, qué hacer si Supabase pausa el proyecto), para el barbero y
-  para el cliente.
+- [`docs/GUIA.md`](docs/GUIA.md): guía de uso con capturas para el barbero y para el cliente,
+  más la parte del administrador (alta de barberías, publicar en GitHub Pages, qué hacer si
+  Supabase pausa el proyecto).
 - [`DESARROLLO.md`](DESARROLLO.md): cómo trabajar en el código y correr las pruebas.
 - Diseño completo: `docs/superpowers/specs/2026-11-22-barber-turnos-design.md`.
 

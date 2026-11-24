@@ -83,3 +83,25 @@ Reserva, abre el link del turno y lo cancela, sin claves ni login. Imprime `Todo
 con 1, y siempre muestra el token: si algo falla a mitad de camino, el turno queda
 confirmado y se borra por SQL (`delete from turnos where token = '<token>'`). El cliente
 "Prueba E2E" también queda en `clientes`; se borra a mano si molesta.
+
+## Guía y demo
+
+`docs/GUIA.md`, `docs/img/` (capturas y `demo.gif`) y `docs/video/` (dos videos con carteles) se
+generan con:
+
+```
+node tools/demo.js     # capturas PNG + GIF
+node tools/video.js    # cliente-reserva.mp4 y panel-barbero.mp4
+```
+
+Necesitan Playwright y ffmpeg (los mismos de las pruebas e2e). Los datos son **inventados** y viven
+en `tools/ejemplo.js` ("Barbería El Molino", clientes y teléfonos 11 5555-xxxx): no son parte de la app
+y no hay que cargarlos en ningún lado. Esas herramientas **nunca tocan el Supabase real**: reemplazan
+`js/config.js` por una config falsa, contestan cada pedido de rpc, tablas y auth desde un estado en
+memoria, y devuelven 404 a cualquier otra ruta de `supabase.co`. Al terminar verifican que no hubo
+pedidos a ningún host que no sea el local o el falso. Reusan el servidor y los helpers de
+`tests/e2e-util.js`. El reloj queda fijo en el lunes 23/11/2026 11:50 de Buenos Aires.
+
+`tools/` y `tests/` no están en `ARCHIVOS` de `sw.js`: no se cachean en el celular. Si cambia algo
+visible de la app, volver a correr las dos herramientas y revisar que la guía siga diciendo lo que
+la app hace.
