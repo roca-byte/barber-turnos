@@ -33,3 +33,22 @@ Dos tipos de prueba en `tests/sql/`:
 
 El reloj de las pruebas se fija con `set app.ahora = '2026-12-01 12:00-03'`;
 las funciones usan `app.ahora()` en vez de `now()`.
+
+## Configuración de la función `notificar`
+
+La Edge Function no usa secretos propios: lee su configuración de `app.ajustes_privados`
+con `public.ajustes_notificar()` (solo `service_role` la ejecuta) y la guarda 5 minutos en
+memoria. Se cargan en el SQL Editor del Supabase real, una sola vez y nunca en el repo,
+después de aplicar `2026112207` y `2026112208` (ambas `_remoto`):
+
+```
+insert into app.ajustes_privados values
+  ('url_notificar',     'https://<proyecto>.supabase.co/functions/v1/notificar'),
+  ('secreto_notificar', '<secreto compartido, uno largo y al azar>'),
+  ('vapid_publica',     '<clave pública VAPID>'),
+  ('vapid_privada',     '<clave privada VAPID>'),
+  ('vapid_contacto',    'mailto:<contacto>');
+```
+
+Si falta alguna fila la función responde 500 y no manda nada. Para rotar un valor, un
+`update` y esperar hasta 5 minutos (o redesplegar la función).

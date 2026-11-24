@@ -5,7 +5,8 @@
 -- Antes de usarla hay que cargar dos filas en app.ajustes_privados (ver README / DESARROLLO):
 --   insert into app.ajustes_privados values
 --     ('url_notificar',    'https://<proyecto>.supabase.co/functions/v1/notificar'),
---     ('secreto_notificar', '<el mismo valor que NOTIFICAR_SECRETO>');
+--     ('secreto_notificar', '<secreto compartido, lo lee la función por ajustes_notificar()>');
+-- Las filas vapid_publica, vapid_privada y vapid_contacto las describe 2026112208.
 
 create extension if not exists pg_net;
 

@@ -1,19 +1,42 @@
 // notificar — Edge Function de Supabase (Deno). La llama el trigger app.avisar_turno con
 // {tipo, nuevo, viejo} y manda una push a todos los dispositivos de la barbería.
-// Secretos: NOTIFICAR_SECRETO, VAPID_PUBLICA, VAPID_PRIVADA, VAPID_CONTACTO (mailto:...).
-// SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY los pone Supabase solo.
+// Configuración: no hay secretos de Edge Function (pegar la clave privada VAPID en un chat o
+// panel era el problema). La función los lee de app.ajustes_privados con la RPC
+// ajustes_notificar(), que solo ejecuta service_role (migración 2026112208). Se guarda en
+// memoria 5 minutos para no ir a la base en cada push. SUPABASE_URL y
+// SUPABASE_SERVICE_ROLE_KEY los pone Supabase solo.
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4';
 import { armarMensaje } from './mensaje.js';
 
 const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-webpush.setVapidDetails(Deno.env.get('VAPID_CONTACTO')!, Deno.env.get('VAPID_PUBLICA')!, Deno.env.get('VAPID_PRIVADA')!);
+
+const VIGENCIA_MS = 5 * 60 * 1000;
+let config: { secreto: string; vapid_publica: string; vapid_privada: string; vapid_contacto: string } | null = null;
+let cargadaEn = 0;
+
+// Devuelve la configuración completa o null si no se pudo cargar o falta algún campo.
+// Si falla no se usa una copia vencida: ante la duda, se rechaza (falla cerrada).
+async function cargarConfig() {
+  if (config && Date.now() - cargadaEn < VIGENCIA_MS) return config;
+  config = null;
+  const { data, error } = await db.rpc('ajustes_notificar');
+  if (error) { console.error('ajustes_notificar', error); return null; }
+  const faltan = ['secreto', 'vapid_publica', 'vapid_privada', 'vapid_contacto'].filter((k) => !data?.[k]);
+  if (faltan.length) { console.error('ajustes_notificar: faltan', faltan.join(', ')); return null; }
+  // Se registra una vez por carga, no por pedido.
+  webpush.setVapidDetails(data.vapid_contacto, data.vapid_publica, data.vapid_privada);
+  config = data;
+  cargadaEn = Date.now();
+  return config;
+}
 
 Deno.serve(async (req) => {
-  // La función es pública en internet: solo el trigger conoce el secreto. Sin secreto
-  // configurado se rechaza todo (undefined !== undefined sería "igual").
-  const secreto = Deno.env.get('NOTIFICAR_SECRETO');
-  if (!secreto || req.headers.get('x-notificar-secreto') !== secreto) {
+  // La función es pública en internet: solo el trigger conoce el secreto. Si la configuración
+  // no se puede cargar, nunca se acepta el pedido (500, no 200): no hay con qué comparar.
+  const cfg = await cargarConfig();
+  if (!cfg) return new Response('configuración no disponible', { status: 500 });
+  if (req.headers.get('x-notificar-secreto') !== cfg.secreto) {
     return new Response('no autorizado', { status: 401 });
   }
   let cuerpo;
