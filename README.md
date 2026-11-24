@@ -19,3 +19,14 @@ Supabase (Postgres con RLS y funciones). Sin cuentas para el cliente.
   para el cliente.
 - [`DESARROLLO.md`](DESARROLLO.md): cómo trabajar en el código y correr las pruebas.
 - Diseño completo: `docs/superpowers/specs/2026-11-22-barber-turnos-design.md`.
+
+## Licencia
+
+[GNU AGPL-3.0 o posterior](LICENSE). Podés usar, estudiar, cambiar y compartir el código;
+si lo ofrecés como servicio por internet (aunque sea modificado), tenés que publicar el
+código completo de tu versión bajo la misma licencia. Por eso cada pantalla tiene un link
+"Código fuente".
+
+Las librerías de `vendor/` mantienen su propia licencia (MIT):
+[supabase-js](https://github.com/supabase/supabase-js) y
+[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator).
