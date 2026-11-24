@@ -34,6 +34,11 @@ begin
   -- Sin configurar: no se avisa, pero tampoco se rompe la reserva.
   if v_url is null or v_secreto is null then return new; end if;
 
+  -- No se avisa al barbero de lo que hace él mismo: sus acciones desde el panel corren como
+  -- authenticated (auth.uid() no es null); las reservas y cancelaciones de clientes corren
+  -- como anon (auth.uid() es null). Los turnos manuales ya los descarta mensaje.js.
+  if auth.uid() is not null then return new; end if;
+
   -- Solo importan altas y cambios de estado; la función decide si hay algo que avisar.
   if tg_op = 'UPDATE' and new.estado is not distinct from old.estado then return new; end if;
 
@@ -42,13 +47,15 @@ begin
     url := v_url,
     body := jsonb_build_object(
       'tipo', tg_op,
-      'nuevo', to_jsonb(new),
-      'viejo', case when tg_op = 'UPDATE' then to_jsonb(old) else null end),
+      -- Solo lo necesario: nunca token ni ip_origen. La función relee el turno por id.
+      'nuevo', jsonb_build_object('id', new.id, 'estado', new.estado, 'origen', new.origen),
+      'viejo', case when tg_op = 'UPDATE' then jsonb_build_object('estado', old.estado) else null end),
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-notificar-secreto', v_secreto)
   );
   return new;
 exception when others then
-  -- Un aviso que falla nunca tiene que impedir que alguien reserve.
+  -- Un aviso que falla nunca tiene que impedir que alguien reserve, pero queda en el log.
+  raise warning 'avisar_turno: %', sqlerrm;
   return new;
 end $$;
 

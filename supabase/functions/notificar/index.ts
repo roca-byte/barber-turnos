@@ -10,19 +10,30 @@ const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SE
 webpush.setVapidDetails(Deno.env.get('VAPID_CONTACTO')!, Deno.env.get('VAPID_PUBLICA')!, Deno.env.get('VAPID_PRIVADA')!);
 
 Deno.serve(async (req) => {
-  // La función es pública en internet: solo el trigger conoce el secreto.
-  if (req.headers.get('x-notificar-secreto') !== Deno.env.get('NOTIFICAR_SECRETO')) {
+  // La función es pública en internet: solo el trigger conoce el secreto. Sin secreto
+  // configurado se rechaza todo (undefined !== undefined sería "igual").
+  const secreto = Deno.env.get('NOTIFICAR_SECRETO');
+  if (!secreto || req.headers.get('x-notificar-secreto') !== secreto) {
     return new Response('no autorizado', { status: 401 });
   }
-  const { tipo, nuevo, viejo } = await req.json();
-  if (!nuevo) return new Response('sin turno', { status: 400 });
+  let cuerpo;
+  try { cuerpo = await req.json(); } catch (_) { return new Response('json inválido', { status: 400 }); }
+  const { tipo, nuevo: aviso, viejo } = cuerpo ?? {};
+  if (!aviso?.id) return new Response('sin turno', { status: 400 });
 
-  // El trigger manda solo la fila (con ids): se buscan los textos que muestra el aviso.
+  // No se confía en el payload: se relee el turno con la clave de servicio. Del payload
+  // solo se usa la transición (tipo y estado anterior).
+  const { data: nuevo, error: errTurno } = await db.from('turnos')
+    .select('estado, origen, barberia_id, servicio_id, cliente_id, nombre_manual, inicio').eq('id', aviso.id).maybeSingle();
+  if (errTurno) { console.error('turno', errTurno); return new Response('error', { status: 500 }); }
+  if (!nuevo) return new Response('turno inexistente'); // 200: nada para avisar
+
   const [serv, barb, cli] = await Promise.all([
     db.from('servicios').select('nombre').eq('id', nuevo.servicio_id).maybeSingle(),
     db.from('barberias').select('zona_horaria').eq('id', nuevo.barberia_id).maybeSingle(),
-    nuevo.cliente_id ? db.from('clientes').select('nombre').eq('id', nuevo.cliente_id).maybeSingle() : Promise.resolve({ data: null })
+    nuevo.cliente_id ? db.from('clientes').select('nombre').eq('id', nuevo.cliente_id).maybeSingle() : Promise.resolve({ data: null, error: null })
   ]);
+  for (const r of [serv, barb, cli]) if (r.error) console.error('datos del aviso', r.error);
   const mensaje = armarMensaje({
     tipo, nuevo, viejo,
     servicio: serv.data?.nombre ?? 'Turno',
@@ -31,7 +42,8 @@ Deno.serve(async (req) => {
   });
   if (!mensaje) return new Response('nada para avisar');
 
-  const { data: subs } = await db.from('push_suscripciones').select('id, endpoint, p256dh, auth').eq('barberia_id', nuevo.barberia_id);
+  const { data: subs, error: errSubs } = await db.from('push_suscripciones').select('id, endpoint, p256dh, auth').eq('barberia_id', nuevo.barberia_id);
+  if (errSubs) { console.error('suscripciones', errSubs); return new Response('error', { status: 500 }); }
   const muertas: string[] = [];
   await Promise.all((subs ?? []).map(async (s) => {
     try {
@@ -39,8 +51,12 @@ Deno.serve(async (req) => {
     } catch (e) {
       // 404/410: el dispositivo ya no existe (desinstalaron o revocaron): se limpia la fila.
       if (e.statusCode === 404 || e.statusCode === 410) muertas.push(s.id);
+      else console.error('push falló', s.endpoint, e.statusCode, e.message);
     }
   }));
-  if (muertas.length) await db.from('push_suscripciones').delete().in('id', muertas);
+  if (muertas.length) {
+    const { error } = await db.from('push_suscripciones').delete().in('id', muertas);
+    if (error) console.error('limpieza de suscripciones', error);
+  }
   return new Response('ok');
 });

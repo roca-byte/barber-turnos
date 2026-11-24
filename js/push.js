@@ -52,7 +52,13 @@ const Push = (() => {
       userVisibleOnly: true, // obligatorio: cada push tiene que mostrar una notificación
       applicationServerKey: urlBase64ToUint8Array(Config.clavePublicaVapid)
     });
-    await Api.push.guardar(barberiaId, sub);
+    try {
+      await Api.push.guardar(barberiaId, sub);
+    } catch (e) {
+      // Sin fila en el servidor no llegaría ningún aviso: se deshace para no mostrar "activo" de mentira.
+      await sub.unsubscribe().catch(() => {});
+      throw e;
+    }
   }
 
   async function desactivar() {
@@ -67,6 +73,12 @@ const Push = (() => {
     if (!cont) return;
     const est = await estado();
     if (!cont.isConnected) return; // el usuario ya salió del menú
+    // Ya suscripto: se vuelve a guardar. Repara filas borradas por la limpieza de la función
+    // (404/410) o endpoints rotados. Si falla no cambia la pantalla, solo queda en la consola.
+    if (est === 'activo') {
+      suscripcion().then((sub) => sub && Api.push.guardar(Panel.ctx.est.barberia.id, sub))
+        .catch((e) => console.error('push: no se pudo renovar la suscripción', e));
+    }
     const hayBoton = est === 'activo' || est === 'inactivo';
     cont.innerHTML = `<p id="notif-texto">${Html.esc(TEXTOS[est])}</p>
       <p class="error" id="notif-error" role="alert" hidden></p>
