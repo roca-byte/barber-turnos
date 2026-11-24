@@ -56,3 +56,24 @@ claves, hay que borrar las filas `vapid_*` y todas las suscripciones, porque que
 
 Si falta el secreto o la url la función responde 500 y no manda nada. Para rotar un valor, un
 `update` y esperar hasta 5 minutos (o redesplegar la función).
+
+## Alta de una barbería
+
+1. En Supabase: Authentication -> Users -> "Add user" (email y contraseña, "Auto confirm").
+2. Abrí `docs/alta-barberia.sql`, editá las cuatro variables del principio (slug, nombre,
+   whatsapp, email del usuario) y pegalo en el SQL Editor. Crea la barbería, su barbero, la
+   membresía, el servicio "Corte" (30 min) y los horarios de lunes a sábado. Al final avisa
+   el link público. El archivo trae también cómo pausar una barbería (`activa = false`).
+
+## Prueba contra el Supabase real
+
+```
+node tests/e2e-real.js <slug> [carpeta-de-capturas]
+```
+
+Es la única prueba que usa la red de verdad (la base de `js/config.js`); nunca corre sola.
+`<slug>` tiene que ser una barbería de prueba con servicio y horarios (la del alta sirve).
+Reserva, abre el link del turno y lo cancela, sin claves ni login. Imprime `Todo bien` o sale
+con 1, y siempre muestra el token: si algo falla a mitad de camino, el turno queda
+confirmado y se borra por SQL (`delete from turnos where token = '<token>'`). El cliente
+"Prueba E2E" también queda en `clientes`; se borra a mano si molesta.
